@@ -372,8 +372,8 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 ### M4 — Regional asteroid + fire system (3 days)
 
 - [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events.
-- [ ] `systems/fire.ts`: CA with fuel/moisture/wind/slope; burn overlay texture; burnt trees.
-- [ ] `systems/wind.ts`: base wind field + settings UI.
+- [x] `systems/fire.ts`: CA with fuel/moisture/wind/slope (sim done; burn overlay texture + burnt trees still to do).
+- [x] `systems/wind.ts`: base wind field + gust perturbations (settings UI still to do).
 - [ ] Asteroid (region scale): approach streak, flash, expanding shockwave ring that damages as it passes, crater carved into terrain, ejecta particles, thermal ignition → fire system.
 - [ ] `fx/Particles.ts` pooled GPU particles, `PostFX` bloom, screen shake.
 - [ ] Global asteroid impacts generate their local crater + fires when the region is entered later.
