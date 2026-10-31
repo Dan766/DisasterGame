@@ -1,6 +1,7 @@
 /**
  * Turns global sim layers into GPU data textures. Colors are presentation, so
- * they live here, not in sim/.
+ * they live here, not in sim/. Dynamic layers (effects, ash, elevation) are
+ * rewritten in place so updates don't reallocate GPU textures.
  */
 import {
   ClampToEdgeWrapping,
@@ -14,8 +15,8 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   UnsignedByteType,
-  type TextureDataType,
   type PixelFormat,
+  type TextureDataType,
 } from 'three';
 import { smoothstep } from '../../core/math';
 import { Biome, type GlobalWorld } from '../../sim/world';
@@ -34,21 +35,25 @@ const BIOME_COLORS = [
 const SNOW = new Color(0xf4f7fb);
 const SAND = BIOME_COLORS[Biome.Ocean]!;
 
+/** Optical depth → on-screen opacity of the ash veil. */
+const ASH_OPACITY_PER_TAU = 1.4;
+
 export interface SurfaceTextures {
   /** R16F meters. Linear filtering gives smooth coastlines in the shader. */
   elevation: DataTexture;
   /** sRGB land albedo; alpha = sea ice. */
   color: DataTexture;
-  /** R8 night-light intensity from population density and damage. */
+  /** R8 night-light intensity from the initial population density. */
   lights: DataTexture;
+  /** RGBA8: R = infrastructure damage, G = fire intensity. */
+  effects: DataTexture;
+  /** R8 ash veil opacity on the coarse ash grid. */
+  ash: DataTexture;
 }
 
 export function buildSurfaceTextures(world: GlobalWorld): SurfaceTextures {
-  const { width, height } = world;
+  const { width, height, ashWidth, ashHeight } = world;
   const n = width * height;
-
-  const elevation = new Uint16Array(n);
-  for (let i = 0; i < n; i++) elevation[i] = DataUtils.toHalfFloat(world.elevation[i]!);
 
   const color = new Uint8Array(n * 4);
   const lights = new Uint8Array(n);
@@ -80,15 +85,56 @@ export function buildSurfaceTextures(world: GlobalWorld): SurfaceTextures {
     const row = Math.floor(i / width);
     const density = world.population[i]! / world.rowAreaKm2[row]!;
     // ~30 people/km² starts to glow; ~1000/km² is fully lit.
-    const glow = density > 0 ? smoothstep(1.5, 3, Math.log10(density)) : 0;
-    lights[i] = Math.round(glow * (1 - world.damage[i]!) * 255);
+    lights[i] = density > 0 ? Math.round(smoothstep(1.5, 3, Math.log10(density)) * 255) : 0;
   }
 
-  return {
-    elevation: makeTexture(elevation, width, height, RedFormat, HalfFloatType),
+  const textures: SurfaceTextures = {
+    elevation: makeTexture(new Uint16Array(n), width, height, RedFormat, HalfFloatType),
     color: makeTexture(color, width, height, RGBAFormat, UnsignedByteType, true),
     lights: makeTexture(lights, width, height, RedFormat, UnsignedByteType),
+    effects: makeTexture(new Uint8Array(n * 4), width, height, RGBAFormat, UnsignedByteType),
+    ash: makeTexture(
+      new Uint8Array(ashWidth * ashHeight),
+      ashWidth,
+      ashHeight,
+      RedFormat,
+      UnsignedByteType,
+    ),
   };
+  writeElevation(world, textures.elevation);
+  writeEffects(world, textures.effects);
+  writeAsh(world, textures.ash);
+  return textures;
+}
+
+export function writeElevation(world: GlobalWorld, tex: DataTexture): void {
+  const data = tex.image.data as Uint16Array;
+  for (let i = 0; i < data.length; i++) data[i] = DataUtils.toHalfFloat(world.elevation[i]!);
+  tex.needsUpdate = true;
+}
+
+export function writeEffects(world: GlobalWorld, tex: DataTexture): void {
+  const data = tex.image.data as Uint8Array;
+  const { damage, fire } = world;
+  for (let i = 0; i < damage.length; i++) {
+    data[i * 4] = Math.round(damage[i]! * 255);
+    data[i * 4 + 1] = Math.round(fire[i]! * 255);
+  }
+  tex.needsUpdate = true;
+}
+
+export function writeAsh(world: GlobalWorld, tex: DataTexture): void {
+  const data = tex.image.data as Uint8Array;
+  const { ash } = world;
+  for (let i = 0; i < ash.length; i++) {
+    data[i] = Math.round((1 - Math.exp(-ash[i]! * ASH_OPACITY_PER_TAU)) * 255);
+  }
+  tex.needsUpdate = true;
+}
+
+/** Sky-wide opacity of the ash veil (0–1) for a global mean optical depth. */
+export function ashOpacity(meanTau: number): number {
+  return 1 - Math.exp(-meanTau * ASH_OPACITY_PER_TAU);
 }
 
 function makeTexture(

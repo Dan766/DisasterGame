@@ -80,10 +80,10 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 | `biome`      | u8   | ocean, ice, tundra, forest, grassland, desert, jungle, mountain |
 | `population` | f32  | people in cell                                                  |
 | `baseTemp`   | f32  | °C climate baseline (latitude + elevation)                      |
-| `ash`        | f32  | atmospheric dust/ash optical depth 0–1                          |
+| `ash`        | f32  | dust/ash optical depth τ, on a coarse 128 × 64 grid             |
 | `fire`       | f32  | fraction of cell burning 0–1                                    |
 | `damage`     | f32  | fraction of infrastructure destroyed 0–1                        |
-| `craters`    | list | `{lat, lon, radiusKm}` for rendering + regen                    |
+| `craters`    | list | `{lat, lon, radiusKm, ocean}` for rendering + regen             |
 
 - **Global scalars:** `globalTempAnomaly`, `totalPopulation`, `casualties`, `damageUSD`, `simTime`.
 
@@ -350,13 +350,14 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 
 ### M2 — Asteroid on the globe (2 days)
 
-- [ ] `DisasterDef` interface, registry, `ParamSchema` → auto UI panel.
-- [ ] `disasters/asteroid.ts` (globe scale): energy, radii, airburst rule, population/damage application, ash injection.
-- [ ] `systems/atmosphere.ts`: ash advection + decay, global temp anomaly.
-- [ ] Views: incoming meteor streak, flash, crater decal, ash cloud layer, darkening atmosphere.
-- [ ] Targeting reticle with blast/thermal radii.
-- [ ] Stats panel + event log + time controls.
-- [ ] Tests: energy/radius scaling monotonic; a 10 km impactor yields a temp anomaly below −5 °C; a 20 m impactor airbursts.
+- [x] `DisasterDef` interface, registry, `ParamSchema` → auto UI panel.
+- [x] `disasters/asteroid.ts` (globe scale): energy, radii, airburst rule, population/damage application, ash injection. Calibrated to Meteor Crater and Chicxulub.
+- [x] `systems/atmosphere.ts`: ash advection + decay, global temp anomaly. Ash lives on a coarse 128×64 grid (mass-conserving transport). Famine deaths follow from sustained cooling.
+- [x] `systems/damage.ts`: radial damage that is area-exact even for blasts smaller than a grid cell (polar integration).
+- [x] Views: incoming meteor streak, flash, crater (drawn per-fragment in the globe shader at sub-cell precision; only craters ≥ 2 cells are also carved into elevation), ash veil, darkening atmosphere, fires, dimming city lights.
+- [x] Targeting overlay with crater/blast/fire radii, drawn as geodesic rings in the globe shader.
+- [x] Stats panel + event log + time controls (1×/10×/100×/365×).
+- [x] Tests: energy/radius scaling monotonic; a 10 km impactor yields a temp anomaly below −5 °C; a 20 m impactor airbursts; ash mass conservation; deterministic replay.
 - **Done when:** you can pick size and speed, smash the planet, see casualties tick up, watch ash spread and city lights go dark. **First "wow" milestone.**
 
 ### M3 — Regional view + transition (3 days)

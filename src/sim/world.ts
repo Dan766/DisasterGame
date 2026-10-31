@@ -44,7 +44,11 @@ export interface Crater {
   lat: number;
   lon: number;
   radiusKm: number;
+  ocean: boolean;
 }
+
+/** The ash layer is coarser than the surface grid; ash transport is smooth and runs every tick. */
+export const ASH_DOWNSAMPLE = 4;
 
 export interface GlobalStats {
   initialPopulation: number;
@@ -67,8 +71,15 @@ export interface GlobalWorld {
   readonly baseTemp: Float32Array;
   /** 0–1. */
   readonly moisture: Float32Array;
-  /** Atmospheric dust/ash optical depth, 0–1. */
+  /**
+   * Atmospheric dust/ash optical depth (τ, unbounded) on a coarse equirectangular grid of
+   * `ashWidth × ashHeight` cells covering the same lat/lon extent as the surface layers.
+   */
   readonly ash: Float32Array;
+  readonly ashWidth: number;
+  readonly ashHeight: number;
+  /** km² covered by one ash cell in each ash row. */
+  readonly ashRowAreaKm2: Float64Array;
   /** Fraction of cell burning, 0–1. */
   readonly fire: Float32Array;
   /** Fraction of infrastructure destroyed, 0–1. */
@@ -80,15 +91,22 @@ export interface GlobalWorld {
   stats: GlobalStats;
 }
 
-export function createGlobalWorld(seed: string, width: number, height: number): GlobalWorld {
-  const n = width * height;
-  const rowAreaKm2 = new Float64Array(height);
+/** km² of one equirectangular cell in each row. */
+export function rowAreas(width: number, height: number): Float64Array {
+  const areas = new Float64Array(height);
   const dLon = degToRad(360 / width);
   for (let row = 0; row < height; row++) {
     const north = degToRad(90 - (row * 180) / height);
     const south = degToRad(90 - ((row + 1) * 180) / height);
-    rowAreaKm2[row] = PLANET_RADIUS_KM ** 2 * dLon * (Math.sin(north) - Math.sin(south));
+    areas[row] = PLANET_RADIUS_KM ** 2 * dLon * (Math.sin(north) - Math.sin(south));
   }
+  return areas;
+}
+
+export function createGlobalWorld(seed: string, width: number, height: number): GlobalWorld {
+  const n = width * height;
+  const ashWidth = Math.max(8, Math.floor(width / ASH_DOWNSAMPLE));
+  const ashHeight = Math.max(4, Math.floor(height / ASH_DOWNSAMPLE));
   return {
     seed,
     width,
@@ -98,10 +116,13 @@ export function createGlobalWorld(seed: string, width: number, height: number): 
     population: new Float32Array(n),
     baseTemp: new Float32Array(n),
     moisture: new Float32Array(n),
-    ash: new Float32Array(n),
+    ash: new Float32Array(ashWidth * ashHeight),
+    ashWidth,
+    ashHeight,
+    ashRowAreaKm2: rowAreas(ashWidth, ashHeight),
     fire: new Float32Array(n),
     damage: new Float32Array(n),
-    rowAreaKm2,
+    rowAreaKm2: rowAreas(width, height),
     cities: [],
     craters: [],
     stats: { initialPopulation: 0, casualties: 0, damageUSD: 0, globalTempAnomaly: 0, simDays: 0 },
@@ -120,6 +141,11 @@ export function cellCenter(world: GlobalWorld, cell: number) {
     world.width,
     world.height,
   );
+}
+
+/** People still alive: every death is booked as a casualty, so this stays exact. */
+export function livingPopulation(world: GlobalWorld): number {
+  return Math.max(0, world.stats.initialPopulation - world.stats.casualties);
 }
 
 export function totalPopulation(world: GlobalWorld): number {

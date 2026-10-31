@@ -66,6 +66,29 @@ export function greatCircleDistance(a: LatLon, b: LatLon, radius = PLANET_RADIUS
   return 2 * radius * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** Point reached by travelling `distance` along a great circle at `bearingDeg` (0 = north). */
+export function destinationPoint(
+  from: LatLon,
+  bearingDeg: number,
+  distance: number,
+  radius = PLANET_RADIUS_KM,
+): LatLon {
+  const delta = distance / radius;
+  const theta = bearingDeg * DEG;
+  const phi1 = from.lat * DEG;
+  const lambda1 = from.lon * DEG;
+  const sinPhi2 =
+    Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta);
+  const phi2 = Math.asin(Math.max(-1, Math.min(1, sinPhi2)));
+  const lambda2 =
+    lambda1 +
+    Math.atan2(
+      Math.sin(theta) * Math.sin(delta) * Math.cos(phi1),
+      Math.cos(delta) - Math.sin(phi1) * sinPhi2,
+    );
+  return { lat: phi2 / DEG, lon: wrapLon(lambda2 / DEG) };
+}
+
 /** Equirectangular cell containing a point. Longitude wraps; latitude clamps. */
 export function latLonToCell(lat: number, lon: number, width: number, height: number): Cell {
   const u = (wrapLon(lon) + 180) / 360;
