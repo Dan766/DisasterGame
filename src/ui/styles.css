@@ -330,3 +330,49 @@ button.active {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Regional view ------------------------------------------------------ */
+
+.transition-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.region-panel {
+  top: 12px;
+  left: 12px;
+  width: 280px;
+  padding: 12px 14px;
+}
+
+.region-panel h2 {
+  margin: 0 0 8px;
+}
+
+.region-panel .stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.region-panel .hint {
+  margin: 8px 0;
+}
+
+.region-panel button {
+  width: 100%;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.region-panel[hidden],
+.region-mode .world-panel,
+.region-mode .disaster-panel,
+.region-mode .tooltip {
+  display: none;
+}

@@ -3,19 +3,25 @@ import Stats from 'three/addons/libs/stats.module.js';
 import { FixedStepClock } from './core/clock';
 import { GlobeControls } from './input/GlobeControls';
 import { GlobePicker, type GlobePick } from './input/Picking';
+import { RegionControls } from './input/RegionControls';
 import { DISPLACE_SCALE, GlobeView } from './render/globe/GlobeView';
 import { ImpactFx } from './render/globe/ImpactFx';
 import { ashOpacity } from './render/globe/surfaceTextures';
+import { RegionView } from './render/region/RegionView';
 import { createStarfield } from './render/Starfield';
+import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
 import { GlobeSim } from './sim/GlobeSim';
 import { asteroidEffects, parseAsteroidParams } from './sim/disasters/asteroid';
 import { DISASTERS } from './sim/disasters/registry';
 import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
+import { generateRegion, quantizeCenter } from './sim/gen/region';
+import { RegionDeltaStore, regionId } from './sim/region';
 import { meanAsh } from './sim/systems/atmosphere';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
 import { DisasterPanel } from './ui/DisasterPanel';
 import { EventLog } from './ui/EventLog';
+import { RegionPanel } from './ui/RegionPanel';
 import { StatsPanel } from './ui/StatsPanel';
 import { TimeControls } from './ui/TimeControls';
 import { Tooltip } from './ui/Tooltip';
@@ -60,6 +66,22 @@ scene.add(fx.root);
 
 const clock = new FixedStepClock(GLOBE_STEP_MS);
 
+// --- Regional view ---------------------------------------------------------
+
+type Mode = 'globe' | 'region';
+let mode: Mode = 'globe';
+const regionView = new RegionView();
+const regionDeltas = new RegionDeltaStore();
+const regionCamera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
+const regionControls = new RegionControls(
+  regionCamera,
+  canvas,
+  (x, z) => regionView.heightAt(x, z),
+  regionView.halfExtent,
+);
+const transition = new Transition();
+document.body.append(transition.el);
+
 // --- HUD -------------------------------------------------------------------
 
 const worldPanel = new WorldPanel((seed) => {
@@ -68,6 +90,7 @@ const worldPanel = new WorldPanel((seed) => {
   setTimeout(() => {
     const result = timedGenerate(seed);
     world = result.world;
+    regionDeltas.clear();
     sim = new GlobeSim(world);
     globe.setWorld(world);
     fx.clear();
@@ -86,6 +109,7 @@ const statsPanel = new StatsPanel();
 const eventLog = new EventLog();
 const timeControls = new TimeControls(clock);
 const tooltip = new Tooltip();
+const regionPanel = new RegionPanel(() => void exitRegion());
 
 const stats = new Stats();
 stats.dom.style.cssText = 'position:absolute;bottom:12px;left:12px;';
@@ -97,6 +121,7 @@ hud.append(
   eventLog.el,
   timeControls.el,
   tooltip.el,
+  regionPanel.el,
   stats.dom,
 );
 
@@ -149,11 +174,119 @@ window.addEventListener('pointerup', (e) => {
 });
 
 function handleClick(x: number, y: number) {
+  if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
   if (!def?.spawnGlobe) return;
   const hit = picker.pick(x, y, camera, canvas);
   if (!hit) return;
   launch(def.id, disasterPanel.currentParams, hit);
+}
+
+// Double-click dives into the region (with a disaster armed, use Enter instead so
+// the two clicks don't each launch one).
+canvas.addEventListener('dblclick', (e) => {
+  if (disasterPanel.selected) return;
+  void enterRegionAt(picker.pick(e.clientX, e.clientY, camera, canvas));
+});
+
+/** Dives from the globe into a freshly generated region around a land point. */
+async function enterRegionAt(hit: GlobePick | null): Promise<void> {
+  if (mode !== 'globe' || transition.active || !hit) return;
+  if (world.elevation[cellAt(world, hit.lat, hit.lon)]! < 0) return; // land only
+
+  const savedPosition = camera.position.clone();
+  returnPosition = savedPosition;
+  const diveTo = hit.point.clone().multiplyScalar(1.03);
+  const origin = new THREE.Vector3();
+  const lookAt = new THREE.Vector3();
+  controls.orbit.enabled = false;
+
+  await transition.run({
+    fadeOutMs: 600,
+    fadeInMs: 700,
+    before: (flash) =>
+      tween(
+        650,
+        (t) => {
+          camera.position.lerpVectors(savedPosition, diveTo, t);
+          camera.lookAt(lookAt.lerpVectors(origin, hit.point, t));
+          flash(Math.max(0, (t - 0.55) / 0.45));
+        },
+        easeInCubic,
+      ),
+    swap: () => {
+      // Stored scars for this region id are replayed on top (empty until M4+).
+      const center = quantizeCenter(hit.lat, hit.lon);
+      const region = generateRegion(
+        world,
+        center.lat,
+        center.lon,
+        regionDeltas.get(regionId(center.lat, center.lon)),
+      );
+      regionView.show(region);
+      regionPanel.show(region);
+      hud.classList.add('region-mode');
+      mode = 'region';
+      tooltip.hide();
+      reticle.visible = false;
+      globe.setTarget(null);
+      regionControls.reset(regionView.centerHeight, 480, 0.2, 0.5);
+    },
+    after: async () => {
+      const centerY = regionView.centerHeight;
+      await tween(1400, (t) => {
+        regionControls.reset(centerY, 480 + (170 - 480) * t, 0.2 + 0.4 * t, 0.5 + 0.45 * t);
+      });
+      regionControls.enabled = true;
+    },
+  });
+}
+
+let returnPosition: THREE.Vector3 | null = null;
+
+/** Flies back out to the globe, restoring the camera it left from. */
+async function exitRegion(): Promise<void> {
+  if (mode !== 'region' || transition.active) return;
+  const saved = returnPosition ?? new THREE.Vector3(0, 0.9, 3.2);
+  regionControls.enabled = false;
+  const startOffset = regionCamera.position.clone().sub(regionControls.orbit.target);
+  const target = regionControls.orbit.target.clone();
+
+  await transition.run({
+    fadeOutMs: 500,
+    fadeInMs: 700,
+    before: (flash) =>
+      tween(
+        550,
+        (t) => {
+          regionCamera.position.copy(target).addScaledVector(startOffset, 1 + 2.2 * t);
+          regionCamera.lookAt(target);
+          flash(Math.max(0, (t - 0.4) / 0.6));
+        },
+        easeInCubic,
+      ),
+    swap: () => {
+      mode = 'globe';
+      hud.classList.remove('region-mode');
+      regionPanel.hide();
+      regionView.clear();
+      camera.position.copy(saved).setLength(1.15); // start close to the surface, settle out
+      camera.lookAt(0, 0, 0);
+    },
+    after: async () => {
+      const near = saved.clone().normalize().multiplyScalar(1.15);
+      await tween(
+        900,
+        (t) => {
+          camera.position.lerpVectors(near, saved, t);
+          camera.lookAt(0, 0, 0);
+        },
+        easeInOutCubic,
+      );
+      controls.orbit.enabled = true;
+      controls.orbit.update();
+    },
+  });
 }
 
 /** Plays the approach, then applies the strike to the sim the moment it lands. */
@@ -188,7 +321,10 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key >= '1' && e.key <= '4') {
     timeControls.setSpeed(Number(e.key) - 1);
   } else if (e.key === 'Escape') {
-    disasterPanel.select(null);
+    if (mode === 'region') void exitRegion();
+    else disasterPanel.select(null);
+  } else if (e.key === 'Enter' && mode === 'globe') {
+    void enterRegionAt(hover);
   }
 });
 
@@ -230,6 +366,8 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  regionCamera.aspect = w / h;
+  regionCamera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -251,6 +389,13 @@ if (import.meta.env.DEV) {
       canvas,
       clock,
       launch,
+      enterRegionAt,
+      exitRegion,
+      get mode() {
+        return mode;
+      },
+      regionView,
+      regionCamera,
     },
   });
 }
@@ -274,11 +419,15 @@ renderer.setAnimationLoop((now) => {
   globe.setShocks(fx.shockRings());
   globe.update(now / 1000);
 
-  controls.update(dt);
-  // Picking reads camera.matrixWorld, which render() would otherwise refresh only afterwards.
-  camera.updateMatrixWorld();
-  updateHover();
-  fx.applyShake(camera);
+  if (mode === 'globe') {
+    if (controls.orbit.enabled) controls.update(dt);
+    // Picking reads camera.matrixWorld, which render() would otherwise refresh only afterwards.
+    camera.updateMatrixWorld();
+    updateHover();
+    fx.applyShake(camera);
+  } else {
+    regionControls.update(dt);
+  }
 
   hudTimer -= dt;
   if (hudTimer <= 0) {
@@ -290,6 +439,7 @@ renderer.setAnimationLoop((now) => {
   }
   timeControls.update(world.stats.simDays);
 
-  renderer.render(scene, camera);
+  if (mode === 'region') renderer.render(regionView.scene, regionCamera);
+  else renderer.render(scene, camera);
   stats.end();
 });

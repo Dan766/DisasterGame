@@ -2,7 +2,7 @@
 
 A browser sandbox where you unleash disasters (asteroids, tornados, wildfires) on a procedurally generated planet. You can watch them play out up close in a regional view, then zoom out to the globe to see the global consequences.
 
-**Status:** M2 (asteroids on the globe) complete. See [DESIGN.md](DESIGN.md) for the full design and implementation plan.
+**Status:** M3 (regional view + globe↔region transition) complete. See [DESIGN.md](DESIGN.md) for the full design and implementation plan.
 
 **Stack:** Vite · TypeScript · three.js · Vitest
 
@@ -20,5 +20,7 @@ npm run check    # typecheck + lint + tests
 | `build`               | Typecheck + production build to `dist/` |
 | `test` / `test:watch` | Vitest unit tests (`tests/`)            |
 | `lint` / `format`     | ESLint / Prettier                       |
+
+**Controls:** double-click land on the globe (or press `Enter` over it, which also works with a disaster armed) to dive into a regional diorama; `Esc` returns to the globe.
 
 **Architecture rule:** `src/core/` and `src/sim/` must not import three.js, touch the DOM, or call `Math.random`. ESLint enforces this so the simulation stays deterministic and can move to a Web Worker (see DESIGN.md §4).

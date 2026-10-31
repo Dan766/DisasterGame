@@ -362,11 +362,11 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 
 ### M3 — Regional view + transition (3 days)
 
-- [ ] `gen/region.ts`: footprint sampling, detail noise, rivers, fuel/moisture, towns, roads.
-- [ ] `RegionView`: terrain mesh + splat shader, water plane, instanced houses/towers/trees.
-- [ ] `RegionControls`: pan/orbit/zoom with ground clamping.
-- [ ] `Transition.ts`: camera dive + flash fade, both directions.
-- [ ] `RegionDelta` store (empty for now) + deterministic regeneration test (same lat/lon → identical hash of layers).
+- [x] `gen/region.ts`: footprint sampling, detail noise, rivers, fuel/moisture, towns, roads.
+- [x] `RegionView`: terrain mesh + splat shader, water plane, instanced houses/towers/trees.
+- [x] `RegionControls`: pan/orbit/zoom with ground clamping.
+- [x] `Transition.ts`: camera dive + flash fade, both directions.
+- [x] `RegionDelta` store (empty for now) + deterministic regeneration test (same lat/lon → identical hash of layers).
 - **Done when:** double-clicking any land point dives into a distinct-looking diorama matching that biome (desert vs forest vs tundra), and Esc returns to the globe in the same orientation.
 
 ### M4 — Regional asteroid + fire system (3 days)
