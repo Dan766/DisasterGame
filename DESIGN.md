@@ -387,7 +387,7 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 - [x] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.
 - [x] `RegionDelta` persistence: record craters + burn mask (RLE) + destroyed structures on exit, replay on re-entry.
 - [x] Global asteroid impacts generate their local crater + fires when the region is entered later.
-- [ ] Wind settings UI (direction/speed in the world panel).
+- [x] Wind settings UI (direction/speed in the world panel).
 - [x] Tests: fire spreads faster downwind; fire does not cross a water barrier.
 - [x] Tests: crater depth > 0 at center (done); damage conserves population (done); a revisited region reproduces the burn mask.
 - **Done when:** an impact in a forested region carves a crater, levels a town and starts a wildfire that spreads with the wind; leaving and re-entering shows the same scars. **First chain reaction.**

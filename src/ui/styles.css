@@ -360,6 +360,25 @@ button.active {
   padding: 2px 0;
 }
 
+.region-panel .wind {
+  margin-top: 8px;
+}
+
+.region-panel .wind label {
+  display: block;
+  padding: 2px 0;
+}
+
+.region-panel .wind label b {
+  float: right;
+}
+
+.region-panel .wind input {
+  display: block;
+  width: 100%;
+  margin: 2px 0 0;
+}
+
 .region-panel .hint {
   margin: 8px 0;
 }

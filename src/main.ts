@@ -25,6 +25,7 @@ import { impactSpecFromKm } from './sim/systems/impact';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
 import { DisasterPanel } from './ui/DisasterPanel';
 import { EventLog } from './ui/EventLog';
+import { createWind } from './sim/systems/wind';
 import { RegionPanel } from './ui/RegionPanel';
 import { StatsPanel } from './ui/StatsPanel';
 import { SPEEDS, TimeControls } from './ui/TimeControls';
@@ -74,6 +75,7 @@ const regionClock = new FixedStepClock(1000 / REGION_TICK_HZ);
 /** Region speed multiplier per time-control button (the globe's day/s rates make no sense here). */
 const REGION_SPEEDS = [1, 2, 5, 10] as const;
 let regionSim: RegionSim | null = null;
+const windSetting = { fromDeg: 270, speed: 5 };
 
 // --- Regional view ---------------------------------------------------------
 
@@ -301,8 +303,8 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
       if (caughtUp) regionDeltas.set(region.id, caughtUp);
       regionView.show(region);
       regionView.updateFire(region, performance.now() / 1000);
-      regionSim = new RegionSim(region);
-      regionPanel.show(region);
+      regionSim = new RegionSim(region, createWind(windSetting.fromDeg, windSetting.speed));
+      regionPanel.show(region, regionSim.wind);
       hud.classList.add('region-mode');
       mode = 'region';
       tooltip.hide();
@@ -350,6 +352,9 @@ async function exitRegion(): Promise<void> {
       if (regionSim) {
         const id = regionSim.region.id;
         regionDeltas.set(id, captureDelta(regionSim.region, regionSim, regionDeltas.get(id)));
+        // Remember the player's wind choice for the next visit.
+        windSetting.fromDeg = regionSim.wind.fromDeg;
+        windSetting.speed = regionSim.wind.speed;
       }
       regionView.clear();
       regionFx.clear();
