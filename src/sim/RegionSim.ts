@@ -1,0 +1,40 @@
+/**
+ * Regional simulation driver (DESIGN.md §4): owns the wind field and the RNG stream for
+ * one region and advances the shared field systems in a fixed order each tick
+ * (wind → fire). Pure typed-array code, so it is deterministic and worker-ready.
+ */
+import { createRng, type Rng } from '../core/rng';
+import type { RegionWorld } from './region';
+import { stepFire, type FireStepResult } from './systems/fire';
+import { createWind, stepWind, type WindField } from './systems/wind';
+
+/** Region ticks per real second at 1× (DESIGN.md §4: 10 Hz). */
+export const REGION_TICK_HZ = 10;
+/** Game seconds per region tick. */
+export const REGION_DT = 1 / REGION_TICK_HZ;
+
+export class RegionSim {
+  readonly wind: WindField;
+  /** Game seconds simulated since the region was entered. */
+  elapsed = 0;
+  /** Result of the most recent fire step. */
+  lastFire: FireStepResult = { ignited: 0, burntOut: 0, burning: 0, structuresLost: 0 };
+
+  private readonly fireRng: Rng;
+
+  constructor(
+    readonly region: RegionWorld,
+    wind: WindField = createWind(),
+  ) {
+    this.wind = wind;
+    this.fireRng = createRng(region.seed).fork('fire');
+  }
+
+  /** Advances all region systems by one fixed tick. */
+  step(dt: number = REGION_DT): FireStepResult {
+    stepWind(this.wind, dt);
+    this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt);
+    this.elapsed += dt;
+    return this.lastFire;
+  }
+}

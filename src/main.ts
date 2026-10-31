@@ -17,13 +17,14 @@ import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
 import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { RegionDeltaStore, regionId } from './sim/region';
+import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
 import { meanAsh } from './sim/systems/atmosphere';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
 import { DisasterPanel } from './ui/DisasterPanel';
 import { EventLog } from './ui/EventLog';
 import { RegionPanel } from './ui/RegionPanel';
 import { StatsPanel } from './ui/StatsPanel';
-import { TimeControls } from './ui/TimeControls';
+import { SPEEDS, TimeControls } from './ui/TimeControls';
 import { Tooltip } from './ui/Tooltip';
 import { WorldPanel, randomSeed } from './ui/WorldPanel';
 import './ui/styles.css';
@@ -65,6 +66,11 @@ const fx = new ImpactFx();
 scene.add(fx.root);
 
 const clock = new FixedStepClock(GLOBE_STEP_MS);
+/** Region sim clock: 10 Hz at 1×, paused/sped up together with the globe clock. */
+const regionClock = new FixedStepClock(1000 / REGION_TICK_HZ);
+/** Region speed multiplier per time-control button (the globe's day/s rates make no sense here). */
+const REGION_SPEEDS = [1, 2, 5, 10] as const;
+let regionSim: RegionSim | null = null;
 
 // --- Regional view ---------------------------------------------------------
 
@@ -224,6 +230,7 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         regionDeltas.get(regionId(center.lat, center.lon)),
       );
       regionView.show(region);
+      regionSim = new RegionSim(region);
       regionPanel.show(region);
       hud.classList.add('region-mode');
       mode = 'region';
@@ -270,6 +277,7 @@ async function exitRegion(): Promise<void> {
       hud.classList.remove('region-mode');
       regionPanel.hide();
       regionView.clear();
+      regionSim = null;
       camera.position.copy(saved).setLength(1.15); // start close to the surface, settle out
       camera.lookAt(0, 0, 0);
     },
@@ -396,6 +404,9 @@ if (import.meta.env.DEV) {
       },
       regionView,
       regionCamera,
+      get regionSim() {
+        return regionSim;
+      },
     },
   });
 }
@@ -410,8 +421,16 @@ renderer.setAnimationLoop((now) => {
   last = now;
   const dt = Math.min(frameMs, 100) / 1000;
 
-  const steps = clock.advance(frameMs);
-  for (let i = 0; i < steps; i++) sim.step(1);
+  // The globe only advances while viewed from orbit; the region has its own 10 Hz clock.
+  if (mode === 'globe') {
+    const steps = clock.advance(frameMs);
+    for (let i = 0; i < steps; i++) sim.step(1);
+  } else if (regionSim) {
+    regionClock.paused = clock.paused;
+    regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;
+    const ticks = regionClock.advance(frameMs);
+    for (let i = 0; i < ticks; i++) regionSim.step(REGION_DT);
+  }
   globe.syncLayers(world, sim.dirty);
   Object.assign(sim.dirty, { terrain: false, effects: false, ash: false });
 
