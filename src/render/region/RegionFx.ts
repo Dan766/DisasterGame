@@ -18,6 +18,7 @@ import {
   Vector3,
 } from 'three';
 import { degToRad } from '../../core/geo';
+import { Particles } from '../fx/Particles';
 import { REGION_SIZE } from '../../sim/region';
 import type { Shockwave } from '../../sim/systems/impact';
 
@@ -54,6 +55,12 @@ export class RegionFx {
   private readonly ringGeo = new CylinderGeometry(1, 1, 1, 72, 1, true);
   private readonly trailGeo = new ConeGeometry(1, 1, 12, 1, true);
   private shake = 0;
+  /** Shared pooled particles (ejecta now; smoke, sparks and debris as they land). */
+  readonly particles = new Particles();
+
+  constructor() {
+    this.group.add(...this.particles.meshes);
+  }
 
   /**
    * Streaks a meteor in from the sky toward `target` (world space, on the ground) and calls
@@ -106,6 +113,52 @@ export class RegionFx {
     this.group.add(sprite);
     this.flashes.push({ sprite, t: 0, size });
     this.shake = Math.min(1, 0.25 + size / 120);
+    this.ejecta(point, size);
+  }
+
+  /** Throws a fan of rock and a dust plume up from the impact point. */
+  private ejecta(point: Vector3, size: number): void {
+    const rocks = Math.min(2500, Math.round(250 + size * 60));
+    for (let i = 0; i < rocks; i++) {
+      const az = Math.random() * Math.PI * 2;
+      const elev = 0.9 + Math.random() * 0.6; // steep, so it arcs and falls back
+      const speed = (0.6 + Math.random() * 0.9) * (12 + size * 1.6);
+      this.particles.emit({
+        x: point.x,
+        y: point.y + 0.5,
+        z: point.z,
+        vx: Math.cos(az) * Math.cos(elev) * speed * 0.6,
+        vy: Math.sin(elev) * speed,
+        vz: Math.sin(az) * Math.cos(elev) * speed * 0.6,
+        gravity: -45,
+        life: 2.5 + Math.random() * 2.5,
+        size: 0.5 + Math.random() * 0.9,
+        color: 0xffb060,
+        colorEnd: 0x2a2018,
+        alpha: 0.95,
+        additive: Math.random() < 0.4,
+      });
+    }
+    const dust = Math.min(600, Math.round(80 + size * 14));
+    for (let i = 0; i < dust; i++) {
+      const az = Math.random() * Math.PI * 2;
+      const out = Math.random() * size * 0.5;
+      this.particles.emit({
+        x: point.x + Math.cos(az) * out * 0.3,
+        y: point.y + 1,
+        z: point.z + Math.sin(az) * out * 0.3,
+        vx: Math.cos(az) * out * 0.5,
+        vy: 4 + Math.random() * (6 + size * 0.5),
+        vz: Math.sin(az) * out * 0.5,
+        gravity: 0.8,
+        life: 6 + Math.random() * 5,
+        size: 2 + size * 0.1,
+        sizeEnd: 8 + size * 0.5,
+        color: 0x8a7458,
+        colorEnd: 0x4a4038,
+        alpha: 0.5,
+      });
+    }
   }
 
   /** Advances the animations and syncs shockwave rings to the sim's active waves. */
@@ -184,6 +237,7 @@ export class RegionFx {
     }
 
     this.shake = Math.max(0, this.shake - dt * 1.4);
+    this.particles.update(dt);
   }
 
   /** Camera shake offset for this frame, in world units (scaled by the caller's distance). */
@@ -207,6 +261,8 @@ export class RegionFx {
     this.flashes = [];
     this.rings.clear();
     this.group.clear();
+    this.group.add(...this.particles.meshes);
+    this.particles.clear();
     this.shake = 0;
   }
 }
