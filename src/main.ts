@@ -23,6 +23,7 @@ import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
 import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { RegionDeltaStore, regionId } from './sim/region';
+import { RegionSyncer } from './sim/sync';
 import { applyPendingStrikes, captureDelta } from './sim/systems/persistence';
 import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
 import { meanAsh } from './sim/systems/atmosphere';
@@ -330,6 +331,8 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
       regionView.show(region);
       regionView.updateFire(region, performance.now() / 1000);
       regionSim = new RegionSim(region, createWind(windSetting.fromDeg, windSetting.speed));
+      regionSyncer = new RegionSyncer(region, world);
+      nextSyncAt = SYNC_INTERVAL_S;
       regionPanel.show(region, regionSim.wind);
       hud.classList.add('region-mode');
       mode = 'region';
@@ -347,6 +350,11 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
     },
   });
 }
+
+/** Region sim-seconds between periodic region → globe syncs. */
+const SYNC_INTERVAL_S = 5;
+let regionSyncer: RegionSyncer | null = null;
+let nextSyncAt = SYNC_INTERVAL_S;
 
 let returnPosition: THREE.Vector3 | null = null;
 
@@ -376,6 +384,7 @@ async function exitRegion(): Promise<void> {
       hud.classList.remove('region-mode');
       regionPanel.hide();
       if (regionSim) {
+        regionSyncer?.sync(sim);
         const id = regionSim.region.id;
         regionDeltas.set(id, captureDelta(regionSim.region, regionSim, regionDeltas.get(id)));
         // Remember the player's wind choice for the next visit.
@@ -386,6 +395,7 @@ async function exitRegion(): Promise<void> {
       regionFx.clear();
       regionView.scene.add(regionFx.group);
       regionSim = null;
+      regionSyncer = null;
       camera.position.copy(saved).setLength(1.15); // start close to the surface, settle out
       camera.lookAt(0, 0, 0);
     },
@@ -550,6 +560,10 @@ renderer.setAnimationLoop((now) => {
     for (let i = 0; i < ticks; i++) {
       regionSim.step(REGION_DT);
       for (const t of regionSim.tornados) regionView.markScar(t.col, t.row, t.radiusCells);
+    }
+    if (regionSyncer && regionSim.elapsed >= nextSyncAt) {
+      regionSyncer.sync(sim);
+      nextSyncAt = regionSim.elapsed + SYNC_INTERVAL_S;
     }
     if (ticks > 0 || regionSim.lastFire.burning > 0)
       regionView.updateFire(regionSim.region, now / 1000);

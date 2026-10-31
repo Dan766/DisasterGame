@@ -97,6 +97,11 @@ export class GlobeSim {
     return event;
   }
 
+  /** Lights a cell on the globe fire layer (used by region → globe sync for scorched ground). */
+  igniteCell(cell: number, intensity: number): void {
+    this.effects.ignite(cell, intensity);
+  }
+
   /** Events since the last call. */
   drainEvents(): SimEvent[] {
     return this.events.splice(0);
