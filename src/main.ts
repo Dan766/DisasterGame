@@ -430,6 +430,8 @@ renderer.setAnimationLoop((now) => {
     regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;
     const ticks = regionClock.advance(frameMs);
     for (let i = 0; i < ticks; i++) regionSim.step(REGION_DT);
+    if (ticks > 0 || regionSim.lastFire.burning > 0)
+      regionView.updateFire(regionSim.region, now / 1000);
   }
   globe.syncLayers(world, sim.dirty);
   Object.assign(sim.dirty, { terrain: false, effects: false, ash: false });

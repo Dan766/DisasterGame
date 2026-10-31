@@ -6,17 +6,21 @@ import {
   Color,
   ConeGeometry,
   CylinderGeometry,
+  DataTexture,
   DirectionalLight,
   DoubleSide,
   Fog,
   Group,
+  LinearFilter,
   HemisphereLight,
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   MeshPhongMaterial,
   PlaneGeometry,
+  RGBAFormat,
   Quaternion,
   Scene,
   Vector3,
@@ -24,7 +28,13 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRng, hashCombine } from '../../core/rng';
 import { clamp01 } from '../../core/math';
-import { REGION_SIZE, Structure, heightAtCell, type RegionWorld } from '../../sim/region';
+import {
+  FireState,
+  REGION_SIZE,
+  Structure,
+  heightAtCell,
+  type RegionWorld,
+} from '../../sim/region';
 import { Biome } from '../../sim/world';
 
 /** World units per cell (100 m). Heights are meters / 100 × VERTICAL_EXAGGERATION. */
@@ -140,6 +150,10 @@ export class RegionView {
   private readonly group = new Group();
   private readonly disposables: { dispose(): void }[] = [];
   private region: RegionWorld | null = null;
+  private fireTex: DataTexture | null = null;
+  private fireData: Uint8Array | null = null;
+  private trees: { mesh: InstancedMesh; cells: number[]; gone: Uint8Array } | null = null;
+  private readonly charred = new Color(0x2a2220);
 
   constructor() {
     this.scene.add(this.group);
@@ -178,6 +192,98 @@ export class RegionView {
     this.group.add(this.buildWater(region));
     this.buildStructures(region);
     this.buildTrees(region, palette);
+    this.buildFireOverlay(region);
+  }
+
+  /**
+   * Syncs the burn overlay and tree instances with the fire state: burning cells flicker
+   * orange, burnt cells turn charcoal, and trees on burnt cells are removed.
+   */
+  updateFire(region: RegionWorld, timeSec: number): void {
+    const tex = this.fireTex;
+    const data = this.fireData;
+    if (!tex || !data || this.region !== region) return;
+    const n = REGION_SIZE;
+    for (let row = 0; row < n; row++) {
+      const out = (n - 1 - row) * n; // texture row 0 is the south edge
+      for (let col = 0; col < n; col++) {
+        const i = row * n + col;
+        const o = (out + col) * 4;
+        const st = region.fireState[i];
+        if (st === FireState.Burning) {
+          const flicker = 0.5 + 0.5 * Math.sin(timeSec * 9 + col * 1.7 + row * 2.3);
+          data[o] = 255;
+          data[o + 1] = 90 + flicker * 110;
+          data[o + 2] = 10;
+          data[o + 3] = 215;
+        } else if (st === FireState.Burnt) {
+          data[o] = 28;
+          data[o + 1] = 24;
+          data[o + 2] = 22;
+          data[o + 3] = 190;
+        } else {
+          data[o + 3] = 0;
+        }
+      }
+    }
+    tex.needsUpdate = true;
+
+    const trees = this.trees;
+    if (trees) {
+      const m = new Matrix4();
+      let colorsDirty = false;
+      let matsDirty = false;
+      for (let k = 0; k < trees.cells.length; k++) {
+        const st = region.fireState[trees.cells[k]!];
+        const prev = trees.gone[k]!;
+        const next = st === FireState.Burnt ? 2 : st === FireState.Burning ? 1 : 0;
+        if (next === prev) continue;
+        trees.gone[k] = next;
+        if (next === 2) {
+          trees.mesh.setMatrixAt(k, m.makeScale(0, 0, 0));
+          matsDirty = true;
+        } else {
+          trees.mesh.setColorAt(k, this.charred);
+          colorsDirty = true;
+        }
+      }
+      if (matsDirty) trees.mesh.instanceMatrix.needsUpdate = true;
+      if (colorsDirty && trees.mesh.instanceColor) trees.mesh.instanceColor.needsUpdate = true;
+    }
+  }
+
+  private buildFireOverlay(region: RegionWorld): void {
+    const n = REGION_SIZE;
+    const data = new Uint8Array(n * n * 4);
+    const tex = this.track(new DataTexture(data, n, n, RGBAFormat));
+    tex.magFilter = LinearFilter;
+    tex.minFilter = LinearFilter;
+    tex.needsUpdate = true;
+    const geometry = this.track(new PlaneGeometry(n - 1, n - 1, n - 1, n - 1));
+    geometry.rotateX(-Math.PI / 2);
+    const positions = geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < n * n; i++) {
+      positions.setY(
+        i,
+        (Math.max(region.height[i]!, -40) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION + 0.03,
+      );
+    }
+    const material = this.track(
+      new MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+        fog: true,
+      }),
+    );
+    const mesh = new Mesh(geometry, material);
+    mesh.renderOrder = 2;
+    this.group.add(mesh);
+    this.fireTex = tex;
+    this.fireData = data;
   }
 
   clear(): void {
@@ -185,6 +291,9 @@ export class RegionView {
     for (const d of this.disposables) d.dispose();
     this.disposables.length = 0;
     this.region = null;
+    this.fireTex = null;
+    this.fireData = null;
+    this.trees = null;
   }
 
   private track<T extends { dispose(): void }>(item: T): T {
@@ -329,7 +438,7 @@ export class RegionView {
         new ConeGeometry(0.26, 0.7, 6).translate(0, 1.15, 0),
       ])!,
     );
-    const spots: { x: number; z: number; scale: number; tint: number }[] = [];
+    const spots: { x: number; z: number; scale: number; tint: number; cell: number }[] = [];
     for (let i = 0; i < region.fuel.length && spots.length < MAX_TREES; i++) {
       if (region.structure[i] !== Structure.None || region.water[i]! > 0.05) continue;
       const h = region.height[i]!;
@@ -347,6 +456,7 @@ export class RegionView {
           z: row - HALF + rng.float(0.05, 0.95),
           scale: rng.float(0.7, 1.5),
           tint: rng.float(-0.04, 0.12),
+          cell: i,
         });
       }
     }
@@ -363,5 +473,10 @@ export class RegionView {
     });
     this.track({ dispose: () => mesh.dispose() });
     this.group.add(mesh);
+    this.trees = {
+      mesh,
+      cells: spots.map((s) => s.cell),
+      gone: new Uint8Array(spots.length),
+    };
   }
 }
