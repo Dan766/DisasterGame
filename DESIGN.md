@@ -341,11 +341,11 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 
 ### M1 — Procedural globe (2–3 days)
 
-- [ ] `gen/globe.ts`: elevation, temperature, moisture, biome, population and cities into a `GlobalWorld`.
-- [ ] `GlobeView`: cube-sphere, displacement + biome shader, atmosphere glow, night-side city lights.
-- [ ] `GlobeControls`: drag-rotate, wheel zoom, inertia.
-- [ ] `Picking`: ray → lat/lon; hover tooltip shows biome + population.
-- [ ] Seed input + regenerate button.
+- [x] `gen/globe.ts`: elevation, temperature, moisture, biome, population and cities into a `GlobalWorld`. (~450 ms at 512×256.)
+- [x] `GlobeView`: cube-sphere, displacement + biome shader, atmosphere glow, night-side city lights, starfield.
+- [x] `GlobeControls`: drag-rotate, wheel zoom, inertia (wraps three's `OrbitControls`; idle auto-spin).
+- [x] `Picking`: ray → lat/lon (refined for displaced terrain); hover tooltip shows biome, climate, population, nearest city.
+- [x] Seed input + regenerate/random buttons; seed is kept in the `?seed=` URL param.
 - **Done when:** a believable planet with continents, oceans, ice caps and visible city lights is generated in < 1 s, and hovering reports the correct cell data.
 
 ### M2 — Asteroid on the globe (2 days)

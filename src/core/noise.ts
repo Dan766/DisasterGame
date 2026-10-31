@@ -102,16 +102,41 @@ export function createNoise(seed: number | string): Noise {
     const y0 = y - (j - t);
     const z0 = z - (k - t);
 
-    // Which simplex are we in?
-    let i1: number, j1: number, k1: number, i2: number, j2: number, k2: number;
+    // Which simplex are we in? (Plain assignments: this is the hottest path in world gen.)
+    let i1 = 0,
+      j1 = 0,
+      k1 = 0,
+      i2 = 0,
+      j2 = 0,
+      k2 = 0;
     if (x0 >= y0) {
-      if (y0 >= z0) [i1, j1, k1, i2, j2, k2] = [1, 0, 0, 1, 1, 0];
-      else if (x0 >= z0) [i1, j1, k1, i2, j2, k2] = [1, 0, 0, 1, 0, 1];
-      else [i1, j1, k1, i2, j2, k2] = [0, 0, 1, 1, 0, 1];
+      if (y0 >= z0) {
+        i1 = 1;
+        i2 = 1;
+        j2 = 1;
+      } else if (x0 >= z0) {
+        i1 = 1;
+        i2 = 1;
+        k2 = 1;
+      } else {
+        k1 = 1;
+        i2 = 1;
+        k2 = 1;
+      }
     } else {
-      if (y0 < z0) [i1, j1, k1, i2, j2, k2] = [0, 0, 1, 0, 1, 1];
-      else if (x0 < z0) [i1, j1, k1, i2, j2, k2] = [0, 1, 0, 0, 1, 1];
-      else [i1, j1, k1, i2, j2, k2] = [0, 1, 0, 1, 1, 0];
+      if (y0 < z0) {
+        k1 = 1;
+        j2 = 1;
+        k2 = 1;
+      } else if (x0 < z0) {
+        j1 = 1;
+        j2 = 1;
+        k2 = 1;
+      } else {
+        j1 = 1;
+        i2 = 1;
+        j2 = 1;
+      }
     }
 
     const x1 = x0 - i1 + G3;
