@@ -8,6 +8,7 @@ import { DISPLACE_SCALE, GlobeView } from './render/globe/GlobeView';
 import { ImpactFx } from './render/globe/ImpactFx';
 import { ashOpacity } from './render/globe/surfaceTextures';
 import { RegionFx } from './render/region/RegionFx';
+import { FireEmitter } from './render/fx/FireEmitter';
 import { RegionView } from './render/region/RegionView';
 import { createStarfield } from './render/Starfield';
 import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
@@ -84,6 +85,7 @@ let mode: Mode = 'globe';
 const regionView = new RegionView();
 const regionFx = new RegionFx();
 regionView.scene.add(regionFx.group);
+const fireEmitter = new FireEmitter(regionFx.particles);
 const regionDeltas = new RegionDeltaStore();
 const regionCamera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
 const regionControls = new RegionControls(
@@ -539,7 +541,10 @@ renderer.setAnimationLoop((now) => {
     regionControls.update(dt);
   }
   if (mode === 'region') {
-    regionFx.update(dt, regionSim?.shockwaves ?? [], (x, z) => regionView.heightAt(x, z));
+    const heightAt = (x: number, z: number) => regionView.heightAt(x, z);
+    if (regionSim && !clock.paused)
+      fireEmitter.update(dt, regionSim.region, regionSim.wind, heightAt);
+    regionFx.update(dt, regionSim?.shockwaves ?? [], heightAt);
   }
 
   hudTimer -= dt;

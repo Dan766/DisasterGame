@@ -397,7 +397,7 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 Shared visual infrastructure that M5's tornado and wildfire also need.
 
 - [x] `fx/Particles.ts`: pooled GPU particles (instanced quads), shared by ejecta, debris, smoke, sparks; 20k budget. (Lives at `src/render/fx/`.)
-- [ ] Asteroid ejecta (done) + fire smoke/sparks on the particle system (todo).
+- [x] Asteroid ejecta + fire smoke/sparks on the particle system (`fx/FireEmitter.ts`, budgeted per pass, smoke drifts with the wind).
 - [ ] `PostFX`: bloom for fire and flashes, vignette.
 - [ ] `fx/Shake.ts`: screen-shake hook driven by impacts.
 - **Done when:** a regional impact reads as a big event (ejecta, glow, shake) and a large fire is visible from across the region by its smoke.
