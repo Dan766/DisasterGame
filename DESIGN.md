@@ -369,24 +369,42 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - [x] `RegionDelta` store (empty for now) + deterministic regeneration test (same lat/lon → identical hash of layers).
 - **Done when:** double-clicking any land point dives into a distinct-looking diorama matching that biome (desert vs forest vs tundra), and Esc returns to the globe in the same orientation.
 
-### M4 — Regional asteroid + fire system (3 days)
+### M4a — Regional chain reaction (3–4 days)
 
-- [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events.
-- [x] `systems/fire.ts`: CA with fuel/moisture/wind/slope (sim done; burn overlay texture + burnt trees still to do).
-- [x] `systems/wind.ts`: base wind field + gust perturbations (settings UI still to do).
-- [ ] Asteroid (region scale): approach streak, flash, expanding shockwave ring that damages as it passes, crater carved into terrain, ejecta particles, thermal ignition → fire system.
-- [ ] `fx/Particles.ts` pooled GPU particles, `PostFX` bloom, screen shake.
+The core sim loop in the region, visible and playable. Polish FX are deferred to M4b.
+
+- [x] `systems/fire.ts`: CA with fuel/moisture/wind/slope, water/road blocking, ignition helpers.
+- [x] `systems/wind.ts`: base wind field + decaying gust perturbations.
+- [ ] Region tick loop: 10 Hz fixed-step region sim in `main.ts` (wind → fire → damage), paused/sped up by the time controls.
+- [ ] Fire view: burn overlay data texture on the terrain (burning = animated orange, burnt = charcoal); burnt/removed tree instances.
+- [ ] Debug ignite: click-to-ignite in the region (becomes the real wildfire disaster in M5), so fire can be tuned by eye.
+- [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events. Fire's structure damage moves behind this API so casualties are counted in one place.
+- [ ] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
+- [ ] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.
+- [ ] `RegionDelta` persistence: record craters + burn mask (RLE) + destroyed structures on exit, replay on re-entry.
 - [ ] Global asteroid impacts generate their local crater + fires when the region is entered later.
-- [ ] Tests: fire spreads faster downwind; fire does not cross a water barrier; crater depth > 0 at center.
-- **Done when:** an impact in a forested region carves a crater, levels a town and starts a wildfire that spreads with the wind. **First chain reaction.**
+- [ ] Wind settings UI (direction/speed in the world panel).
+- [x] Tests: fire spreads faster downwind; fire does not cross a water barrier.
+- [ ] Tests: crater depth > 0 at center; damage conserves population (alive + dead = initial); a revisited region reproduces the burn mask.
+- **Done when:** an impact in a forested region carves a crater, levels a town and starts a wildfire that spreads with the wind; leaving and re-entering shows the same scars. **First chain reaction.**
 
-### M5 — Tornado + wildfire disasters, sync (3 days)
+### M4b — Region FX (2 days)
+
+Shared visual infrastructure that M5's tornado and wildfire also need.
+
+- [ ] `fx/Particles.ts`: pooled GPU particles (instanced quads), shared by ejecta, debris, smoke, sparks; 20k budget.
+- [ ] Asteroid ejecta + fire smoke/sparks on the particle system.
+- [ ] `PostFX`: bloom for fire and flashes, vignette.
+- [ ] `fx/Shake.ts`: screen-shake hook driven by impacts.
+- **Done when:** a regional impact reads as a big event (ejecta, glow, shake) and a large fire is visible from across the region by its smoke.
+
+### M5 — Tornado + wildfire disasters, sync (3–4 days)
 
 - [ ] `disasters/tornado.ts`: vortex agent, lifecycle, EF damage, wind perturbation, fuel stripping.
 - [ ] Tornado view: layered noise funnel, debris ring, dust skirt, damage path visible in terrain.
-- [ ] `disasters/wildfire.ts`: ignite command + param panel (brush size).
-- [ ] `sim/sync.ts`: region → globe aggregation on exit + periodically; scars persist when revisiting; globe shows scorched/damaged cells.
-- [ ] Tests: sync conserves population (alive + dead = initial); a revisited region reproduces the burn mask.
+- [ ] `disasters/wildfire.ts`: ignite command + param panel (brush size), replacing the M4a debug ignite.
+- [ ] `sim/sync.ts`: region → globe aggregation on exit + periodically; globe shows scorched/damaged cells and global stats include regional losses.
+- [ ] Tests: sync conserves population across scales; tornado wind perturbation measurably shifts fire spread.
 - **Done when:** all three disasters work, a tornado can push a fire front, and leaving a region shows the damage on the globe and in global stats.
 
 ### M6 — Performance & polish (2–3 days)
@@ -408,7 +426,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 6. Real-Earth data pack
 7. Replay / cinematic camera / screenshot mode
 
-**Total to v1 (M0–M6): ~16–20 working days.**
+**Total to v1 (M0–M6): ~19–24 working days** (revised after M3: M4 split into M4a/M4b, M5 widened).
 
 ---
 
