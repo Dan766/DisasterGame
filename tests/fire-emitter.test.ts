@@ -8,7 +8,7 @@ function setup() {
   const region = createRegionWorld('t', 1, 0, 0, 0);
   const out: ParticleSpec[] = [];
   let s = 12345;
-  const rng = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const rng = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32;
   return { region, out, emitter: new FireEmitter({ emit: (p) => out.push(p) }, rng) };
 }
 const flat = () => 0;

@@ -404,11 +404,11 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 ### M5 — Tornado + wildfire disasters, sync (3–4 days)
 
-- [ ] `disasters/tornado.ts`: vortex agent, lifecycle, EF damage, wind perturbation, fuel stripping.
+- [x] `disasters/tornado.ts`: vortex agent, lifecycle, EF damage, wind perturbation, fuel stripping (sim only; `RegionSim.spawnTornado`, no UI/view yet).
 - [ ] Tornado view: layered noise funnel, debris ring, dust skirt, damage path visible in terrain.
 - [ ] `disasters/wildfire.ts`: ignite command + param panel (brush size), replacing the M4a debug ignite.
 - [ ] `sim/sync.ts`: region → globe aggregation on exit + periodically; globe shows scorched/damaged cells and global stats include regional losses.
-- [ ] Tests: sync conserves population across scales; tornado wind perturbation measurably shifts fire spread.
+- [ ] Tests: sync conserves population across scales; ~~tornado wind perturbation measurably shifts fire spread~~ (done, `tests/tornado.test.ts`).
 - **Done when:** all three disasters work, a tornado can push a fire front, and leaving a region shows the damage on the globe and in global stats.
 
 ### M6 — Performance & polish (2–3 days)

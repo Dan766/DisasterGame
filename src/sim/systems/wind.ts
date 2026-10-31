@@ -75,3 +75,35 @@ export function stepWind(wind: WindField, dt: number, halfLifeS = 6): void {
     wind.py[i] = wind.py[i]! * k;
   }
 }
+
+/**
+ * Adds a rotating perturbation (a tornado vortex): counter-clockwise swirl around a cell
+ * with a small inflow component. `strength` is the peak tangential speed (m/s) at
+ * `radiusCells / 2`; it fades to zero at `radiusCells`.
+ */
+export function addVortex(
+  wind: WindField,
+  col: number,
+  row: number,
+  radiusCells: number,
+  strength: number,
+  inflow = 0.3,
+): void {
+  for (let gy = 0; gy < WIND_GRID; gy++) {
+    for (let gx = 0; gx < WIND_GRID; gx++) {
+      const dx = (gx + 0.5) * CELLS_PER_WIND_CELL - col;
+      const dy = (gy + 0.5) * CELLS_PER_WIND_CELL - row;
+      const d = Math.hypot(dx, dy);
+      if (d > radiusCells || d === 0) continue;
+      const u = d / radiusCells;
+      // Rises to a peak at u = 0.5, then falls to zero at the edge.
+      const profile = 4 * u * (1 - u) * strength;
+      // Screen space has +y south, so "counter-clockwise on the map" is (dy, -dx)/d.
+      const tx = dy / d;
+      const ty = -dx / d;
+      const i = gy * WIND_GRID + gx;
+      wind.px[i] = wind.px[i]! + profile * (tx - inflow * (dx / d));
+      wind.py[i] = wind.py[i]! + profile * (ty - inflow * (dy / d));
+    }
+  }
+}
