@@ -14,6 +14,7 @@ import { clamp } from '../../core/math';
 import { REGION_CELL_M, type RegionWorld } from '../region';
 import { Lethality, damageStructure, type DamageLedger } from '../systems/structureDamage';
 import { addVortex, type WindField } from '../systems/wind';
+import type { DisasterDef, Params, Preview } from './types';
 
 export type EfRating = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -142,3 +143,66 @@ export class Tornado {
     return result;
   }
 }
+
+/** Reads the panel params into a spawn spec at the given cell. */
+export function tornadoSpecFromParams(col: number, row: number, params: Params): TornadoSpec {
+  const ef = Math.round(Math.min(5, Math.max(0, Number(params.ef ?? 3)))) as EfRating;
+  return {
+    col,
+    row,
+    ef,
+    headingDeg: Number(params.headingDeg ?? 45),
+    speed: Number(params.speedMs ?? 15),
+    lifetimeS: Number(params.lifetimeS ?? 90),
+  };
+}
+
+/** Region-scale only: there is no globe-scale tornado. */
+export const tornado: DisasterDef = {
+  id: 'tornado',
+  name: 'Tornado',
+  scales: ['region'],
+  params: [
+    { kind: 'number', key: 'ef', label: 'EF rating', min: 0, max: 5, default: 3 },
+    {
+      kind: 'number',
+      key: 'headingDeg',
+      label: 'Travels toward',
+      min: 0,
+      max: 359,
+      default: 45,
+      unit: '°',
+    },
+    {
+      kind: 'number',
+      key: 'speedMs',
+      label: 'Ground speed',
+      min: 5,
+      max: 30,
+      default: 15,
+      unit: 'm/s',
+    },
+    {
+      kind: 'number',
+      key: 'lifetimeS',
+      label: 'Lifetime',
+      min: 20,
+      max: 300,
+      default: 90,
+      unit: 's',
+    },
+  ],
+
+  preview(params: Params): Preview {
+    const spec = tornadoSpecFromParams(0, 0, params);
+    const { vmax, radiusCells } = EF_SCALE[spec.ef]!;
+    return {
+      rings: [],
+      facts: [
+        { label: 'Peak wind', value: `${vmax} m/s` },
+        { label: 'Damage swath', value: `${Math.round(radiusCells * 2 * REGION_CELL_M)} m` },
+        { label: 'Path length', value: `${((spec.speed * spec.lifetimeS) / 1000).toFixed(1)} km` },
+      ],
+    };
+  },
+};

@@ -7,6 +7,7 @@ import { RegionControls } from './input/RegionControls';
 import { DISPLACE_SCALE, GlobeView } from './render/globe/GlobeView';
 import { ImpactFx } from './render/globe/ImpactFx';
 import { ashOpacity } from './render/globe/surfaceTextures';
+import { TornadoEmitter } from './render/fx/TornadoEmitter';
 import { RegionFx } from './render/region/RegionFx';
 import { FireEmitter } from './render/fx/FireEmitter';
 import { PostFX } from './render/fx/PostFX';
@@ -15,6 +16,7 @@ import { createStarfield } from './render/Starfield';
 import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
 import { GlobeSim } from './sim/GlobeSim';
 import { asteroidEffects, parseAsteroidParams } from './sim/disasters/asteroid';
+import { tornadoSpecFromParams } from './sim/disasters/tornado';
 import { DISASTERS } from './sim/disasters/registry';
 import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
@@ -87,6 +89,7 @@ const regionView = new RegionView();
 const regionFx = new RegionFx();
 regionView.scene.add(regionFx.group);
 const fireEmitter = new FireEmitter(regionFx.particles);
+const tornadoEmitter = new TornadoEmitter(regionFx.particles);
 const regionDeltas = new RegionDeltaStore();
 const regionCamera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
 const regionControls = new RegionControls(
@@ -192,9 +195,10 @@ window.addEventListener('pointerup', (e) => {
 function handleClick(x: number, y: number) {
   if (mode === 'region') {
     const def = disasterPanel.selected;
-    return def?.id === 'asteroid' && def.scales.includes('region')
-      ? strikeRegionAt(x, y, disasterPanel.currentParams)
-      : igniteAt(x, y);
+    if (def?.id === 'asteroid' && def.scales.includes('region'))
+      return strikeRegionAt(x, y, disasterPanel.currentParams);
+    if (def?.id === 'tornado') return spawnTornadoAt(x, y, disasterPanel.currentParams);
+    return igniteAt(x, y);
   }
   if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
@@ -221,6 +225,22 @@ function igniteAt(x: number, y: number) {
   if (regionSim.ignite(cell.col, cell.row) > 0) {
     regionView.updateFire(regionSim.region, performance.now() / 1000);
   }
+}
+
+/** Region-scale tornado: touches down at the clicked cell and travels along its heading. */
+function spawnTornadoAt(x: number, y: number, params: Params) {
+  if (!regionSim || transition.active) return;
+  const rect = canvas.getBoundingClientRect();
+  igniteRay.setFromCamera(
+    new THREE.Vector2(
+      ((x - rect.left) / rect.width) * 2 - 1,
+      -((y - rect.top) / rect.height) * 2 + 1,
+    ),
+    regionCamera,
+  );
+  const cell = regionView.pickCell(igniteRay.ray.origin, igniteRay.ray.direction);
+  if (!cell) return;
+  regionSim.spawnTornado(tornadoSpecFromParams(cell.col, cell.row, params));
 }
 
 /** Region-scale asteroid: meteor streak, then the sim resolves the strike and the view reacts. */
@@ -524,7 +544,10 @@ renderer.setAnimationLoop((now) => {
     regionClock.paused = clock.paused;
     regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;
     const ticks = regionClock.advance(frameMs);
-    for (let i = 0; i < ticks; i++) regionSim.step(REGION_DT);
+    for (let i = 0; i < ticks; i++) {
+      regionSim.step(REGION_DT);
+      for (const t of regionSim.tornados) regionView.markScar(t.col, t.row, t.radiusCells);
+    }
     if (ticks > 0 || regionSim.lastFire.burning > 0)
       regionView.updateFire(regionSim.region, now / 1000);
   }
@@ -546,8 +569,10 @@ renderer.setAnimationLoop((now) => {
   }
   if (mode === 'region') {
     const heightAt = (x: number, z: number) => regionView.heightAt(x, z);
-    if (regionSim && !clock.paused)
+    if (regionSim && !clock.paused) {
       fireEmitter.update(dt, regionSim.region, regionSim.wind, heightAt);
+      tornadoEmitter.update(dt, regionSim.tornados, heightAt);
+    }
     regionFx.update(dt, regionSim?.shockwaves ?? [], heightAt);
   }
 

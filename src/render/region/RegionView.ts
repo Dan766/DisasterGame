@@ -152,6 +152,8 @@ export class RegionView {
   private region: RegionWorld | null = null;
   private fireTex: DataTexture | null = null;
   private fireData: Uint8Array | null = null;
+  /** Cells a tornado has passed over (0..255 scar strength), drawn under the fire colours. */
+  private scar: Uint8Array | null = null;
   private trees: { mesh: InstancedMesh; cells: number[]; gone: Uint8Array } | null = null;
   private terrainMesh: Mesh | null = null;
   private waterMesh: Mesh | null = null;
@@ -265,6 +267,12 @@ export class RegionView {
           data[o + 1] = 24;
           data[o + 2] = 22;
           data[o + 3] = 190;
+        } else if (this.scar && this.scar[i]! > 0) {
+          // Tornado damage path: torn-up earth, a brown swath through the vegetation.
+          data[o] = 74;
+          data[o + 1] = 58;
+          data[o + 2] = 42;
+          data[o + 3] = this.scar[i]!;
         } else {
           data[o + 3] = 0;
         }
@@ -296,8 +304,32 @@ export class RegionView {
     }
   }
 
+  /**
+   * Marks the ground under a tornado's core as scarred (call each frame with its position).
+   * Takes effect on the next `updateFire`.
+   */
+  markScar(col: number, row: number, radiusCells: number): void {
+    const n = REGION_SIZE;
+    if (!this.scar) this.scar = new Uint8Array(n * n);
+    const r = Math.max(1, radiusCells);
+    const c0 = Math.max(0, Math.floor(col - r));
+    const c1 = Math.min(n - 1, Math.ceil(col + r));
+    const r0 = Math.max(0, Math.floor(row - r));
+    const r1 = Math.min(n - 1, Math.ceil(row + r));
+    for (let y = r0; y <= r1; y++) {
+      for (let x = c0; x <= c1; x++) {
+        const d = Math.hypot(x - col, y - row) / r;
+        if (d > 1) continue;
+        const v = Math.round(190 * (1 - d * d * 0.6));
+        const i = y * n + x;
+        if (v > this.scar[i]!) this.scar[i] = v;
+      }
+    }
+  }
+
   private buildFireOverlay(region: RegionWorld): void {
     const n = REGION_SIZE;
+    this.scar = null;
     const data = new Uint8Array(n * n * 4);
     const tex = this.track(new DataTexture(data, n, n, RGBAFormat));
     tex.magFilter = LinearFilter;
@@ -338,6 +370,7 @@ export class RegionView {
     this.region = null;
     this.fireTex = null;
     this.fireData = null;
+    this.scar = null;
     this.trees = null;
     this.terrainMesh = null;
     this.waterMesh = null;

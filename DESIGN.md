@@ -405,7 +405,7 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 ### M5 — Tornado + wildfire disasters, sync (3–4 days)
 
 - [x] `disasters/tornado.ts`: vortex agent, lifecycle, EF damage, wind perturbation, fuel stripping (sim only; `RegionSim.spawnTornado`, no UI/view yet).
-- [ ] Tornado view: layered noise funnel, debris ring, dust skirt, damage path visible in terrain.
+- [x] Tornado view: layered particle funnel, debris ring, dust skirt (`render/fx/TornadoEmitter.ts`); brown damage path on the terrain overlay (`RegionView.markScar`). Tornado is in the disaster palette (region click spawns it). Scars are not yet persisted in `RegionDelta`.
 - [ ] `disasters/wildfire.ts`: ignite command + param panel (brush size), replacing the M4a debug ignite.
 - [ ] `sim/sync.ts`: region → globe aggregation on exit + periodically; globe shows scorched/damaged cells and global stats include regional losses.
 - [ ] Tests: sync conserves population across scales; ~~tornado wind perturbation measurably shifts fire spread~~ (done, `tests/tornado.test.ts`).
