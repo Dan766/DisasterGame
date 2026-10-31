@@ -229,6 +229,10 @@ These run independently of disasters and are where chain reactions come from:
 | Volcano               | globe + region                         | lava (slow water variant), ash, fire        |
 | Flood / super-storm   | region                                 | water flow, wind                            |
 | Ice age / solar flare | globe                                  | temp anomaly, population decay              |
+| Meteor shower         | globe + region                         | asteroid (many small impactors)             |
+| Black hole            | region                                 | particles, height flattening, structures    |
+| Alien terraformer     | globe + region                         | spreading CA that rewrites biome/fuel       |
+| Kaiju                 | region                                 | moving agent (tornado-style), structures    |
 
 ### 5.5 Chain-reaction matrix (v1)
 
@@ -421,10 +425,15 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 1. Tsunami (ocean impact → water flow run-up) ← highest chain-reaction value
 2. Earthquake + landslides
 3. Volcano (lava + ash)
-4. Scenario mode ("Destroy Varnholt with ≤ 2 disasters", "Minimize casualties" defense variant). This is the only place goals or scoring would be added.
-5. Save/load worlds (IndexedDB), share seed + command log as URL
-6. Real-Earth data pack
-7. Replay / cinematic camera / screenshot mode
+4. Sci-fi pack (playful, toy-tone disasters that reuse existing systems):
+   - **Meteor shower:** a burst of small asteroids over an area or a whole hemisphere. Reuses the asteroid sim and view unchanged; params are count, spread and size range.
+   - **Black hole:** a gravity well that sucks debris, trees and buildings into a point, flattens nearby terrain toward it, then collapses with a flash. Built on the particle system and height carving.
+   - **Alien terraformer:** a seed that spreads a glowing alien biome outward like fire, rewriting `biome`/`fuel` and draining population. On the globe it shows as a spreading tint; in the region, as recolored terrain and swapped tree meshes.
+   - **Kaiju:** a giant creature that wanders a path (same agent model as the tornado), stomps structures, leaves footprint craters and can be lured by cities. Low-poly toy look, no gore.
+5. Scenario mode ("Destroy Varnholt with ≤ 2 disasters", "Minimize casualties" defense variant). This is the only place goals or scoring would be added.
+6. Save/load worlds (IndexedDB), share seed + command log as URL
+7. Real-Earth data pack
+8. Replay / cinematic camera / screenshot mode
 
 **Total to v1 (M0–M6): ~19–24 working days** (revised after M3: M4 split into M4a/M4b, M5 widened).
 
