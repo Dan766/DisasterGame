@@ -156,3 +156,21 @@ describe('asteroid impact (region)', () => {
     expect(sim.damage.structuresLost).toBeGreaterThan(0);
   });
 });
+
+describe('impactSpecFromKm', () => {
+  it('converts kilometers to 100 m cells', async () => {
+    const { impactSpecFromKm } = await import('../src/sim/systems/impact');
+    const spec = impactSpecFromKm(10, 20, {
+      craterRadiusKm: 0.5,
+      blastRadiusKm: 2,
+      thermalRadiusKm: 3.5,
+    });
+    expect(spec).toEqual({
+      col: 10,
+      row: 20,
+      craterRadiusCells: 5,
+      blastRadiusCells: 20,
+      thermalRadiusCells: 35,
+    });
+  });
+});

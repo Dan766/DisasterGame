@@ -30,6 +30,22 @@ export interface ImpactSpec {
   thermalRadiusCells: number;
 }
 
+/** Converts the kilometer radii of an asteroid's effects into a region-scale impact spec. */
+export function impactSpecFromKm(
+  col: number,
+  row: number,
+  radiiKm: { craterRadiusKm: number; blastRadiusKm: number; thermalRadiusKm: number },
+): ImpactSpec {
+  const perKm = 1000 / REGION_CELL_M;
+  return {
+    col,
+    row,
+    craterRadiusCells: radiiKm.craterRadiusKm * perKm,
+    blastRadiusCells: radiiKm.blastRadiusKm * perKm,
+    thermalRadiusCells: radiiKm.thermalRadiusKm * perKm,
+  };
+}
+
 export interface Shockwave {
   col: number;
   row: number;

@@ -7,6 +7,7 @@ import { RegionControls } from './input/RegionControls';
 import { DISPLACE_SCALE, GlobeView } from './render/globe/GlobeView';
 import { ImpactFx } from './render/globe/ImpactFx';
 import { ashOpacity } from './render/globe/surfaceTextures';
+import { RegionFx } from './render/region/RegionFx';
 import { RegionView } from './render/region/RegionView';
 import { createStarfield } from './render/Starfield';
 import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
@@ -19,6 +20,7 @@ import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { RegionDeltaStore, regionId } from './sim/region';
 import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
 import { meanAsh } from './sim/systems/atmosphere';
+import { impactSpecFromKm } from './sim/systems/impact';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
 import { DisasterPanel } from './ui/DisasterPanel';
 import { EventLog } from './ui/EventLog';
@@ -77,6 +79,8 @@ let regionSim: RegionSim | null = null;
 type Mode = 'globe' | 'region';
 let mode: Mode = 'globe';
 const regionView = new RegionView();
+const regionFx = new RegionFx();
+regionView.scene.add(regionFx.group);
 const regionDeltas = new RegionDeltaStore();
 const regionCamera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
 const regionControls = new RegionControls(
@@ -180,7 +184,12 @@ window.addEventListener('pointerup', (e) => {
 });
 
 function handleClick(x: number, y: number) {
-  if (mode === 'region') return igniteAt(x, y);
+  if (mode === 'region') {
+    const def = disasterPanel.selected;
+    return def?.id === 'asteroid' && def.scales.includes('region')
+      ? strikeRegionAt(x, y, disasterPanel.currentParams)
+      : igniteAt(x, y);
+  }
   if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
   if (!def?.spawnGlobe) return;
@@ -206,6 +215,39 @@ function igniteAt(x: number, y: number) {
   if (regionSim.ignite(cell.col, cell.row) > 0) {
     regionView.updateFire(regionSim.region, performance.now() / 1000);
   }
+}
+
+/** Region-scale asteroid: meteor streak, then the sim resolves the strike and the view reacts. */
+function strikeRegionAt(x: number, y: number, params: Params) {
+  const targetSim = regionSim;
+  if (!targetSim || transition.active) return;
+  const rect = canvas.getBoundingClientRect();
+  igniteRay.setFromCamera(
+    new THREE.Vector2(
+      ((x - rect.left) / rect.width) * 2 - 1,
+      -((y - rect.top) / rect.height) * 2 + 1,
+    ),
+    regionCamera,
+  );
+  const cell = regionView.pickCell(igniteRay.ray.origin, igniteRay.ray.direction);
+  if (!cell) return;
+  const effects = asteroidEffects(parseAsteroidParams(params));
+  const spec = impactSpecFromKm(cell.col, cell.row, effects);
+  const half = regionView.halfExtent;
+  const point = new THREE.Vector3(cell.col - half + 0.5, 0, cell.row - half + 0.5);
+  point.y = regionView.heightAt(point.x, point.z);
+  const size = Math.max(3, Math.min(40, spec.thermalRadiusCells * 0.5));
+  regionFx.launch(point, Number(params.angleDeg ?? 90), Math.max(1.5, size * 0.25), () => {
+    if (regionSim !== targetSim) return; // left the region mid-flight
+    targetSim.impact(spec);
+    const crater = targetSim.craters[targetSim.craters.length - 1];
+    regionView.remeshTerrain(
+      targetSim.region,
+      crater ?? { col: cell.col, row: cell.row, radiusCells: spec.blastRadiusCells * 0.3 },
+    );
+    regionView.updateFire(targetSim.region, performance.now() / 1000);
+    regionFx.detonate(point, size);
+  });
 }
 
 // Double-click dives into the region (with a disaster armed, use Enter instead so
@@ -297,6 +339,8 @@ async function exitRegion(): Promise<void> {
       hud.classList.remove('region-mode');
       regionPanel.hide();
       regionView.clear();
+      regionFx.clear();
+      regionView.scene.add(regionFx.group);
       regionSim = null;
       camera.position.copy(saved).setLength(1.15); // start close to the surface, settle out
       camera.lookAt(0, 0, 0);
@@ -469,6 +513,9 @@ renderer.setAnimationLoop((now) => {
   } else {
     regionControls.update(dt);
   }
+  if (mode === 'region') {
+    regionFx.update(dt, regionSim?.shockwaves ?? [], (x, z) => regionView.heightAt(x, z));
+  }
 
   hudTimer -= dt;
   if (hudTimer <= 0) {
@@ -480,7 +527,11 @@ renderer.setAnimationLoop((now) => {
   }
   timeControls.update(world.stats.simDays);
 
-  if (mode === 'region') renderer.render(regionView.scene, regionCamera);
-  else renderer.render(scene, camera);
+  if (mode === 'region') {
+    const shakeOffset = regionFx.shakeOffset(new THREE.Vector3()).multiplyScalar(6);
+    regionCamera.position.add(shakeOffset);
+    renderer.render(regionView.scene, regionCamera);
+    regionCamera.position.sub(shakeOffset);
+  } else renderer.render(scene, camera);
   stats.end();
 });

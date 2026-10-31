@@ -153,6 +153,10 @@ export class RegionView {
   private fireTex: DataTexture | null = null;
   private fireData: Uint8Array | null = null;
   private trees: { mesh: InstancedMesh; cells: number[]; gone: Uint8Array } | null = null;
+  private terrainMesh: Mesh | null = null;
+  private waterMesh: Mesh | null = null;
+  private fireMesh: Mesh | null = null;
+  private structureSets: { mesh: InstancedMesh; cells: number[] }[] = [];
   private readonly charred = new Color(0x2a2220);
 
   constructor() {
@@ -226,8 +230,10 @@ export class RegionView {
     this.scene.background = new Color(palette.sky);
     this.scene.fog = new Fog(palette.fog, 160, 520);
 
-    this.group.add(this.buildTerrain(region, palette));
-    this.group.add(this.buildWater(region));
+    this.terrainMesh = this.buildTerrain(region, palette);
+    this.waterMesh = this.buildWater(region);
+    this.group.add(this.terrainMesh);
+    this.group.add(this.waterMesh);
     this.buildStructures(region);
     this.buildTrees(region, palette);
     this.buildFireOverlay(region);
@@ -320,6 +326,7 @@ export class RegionView {
     const mesh = new Mesh(geometry, material);
     mesh.renderOrder = 2;
     this.group.add(mesh);
+    this.fireMesh = mesh;
     this.fireTex = tex;
     this.fireData = data;
   }
@@ -332,6 +339,118 @@ export class RegionView {
     this.fireTex = null;
     this.fireData = null;
     this.trees = null;
+    this.terrainMesh = null;
+    this.waterMesh = null;
+    this.fireMesh = null;
+    this.structureSets = [];
+  }
+
+  /**
+   * Re-meshes the terrain after the sim edited `height` (a crater): updates vertex heights,
+   * normals and the water/fire-overlay surfaces, scorches the ground around `scorch`, and
+   * re-seats or removes the trees and structures standing on changed ground.
+   */
+  remeshTerrain(
+    region: RegionWorld,
+    scorch?: { col: number; row: number; radiusCells: number },
+  ): void {
+    if (this.region !== region || !this.terrainMesh) return;
+    const n = REGION_SIZE;
+    const terrain = this.terrainMesh.geometry;
+    const tp = terrain.getAttribute('position') as BufferAttribute;
+    const colors = terrain.getAttribute('color') as BufferAttribute;
+    for (let i = 0; i < n * n; i++) {
+      tp.setY(i, (Math.max(region.height[i]!, -40) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION);
+    }
+    if (scorch) {
+      const reach = scorch.radiusCells * 2.2;
+      const r0 = Math.ceil(reach);
+      const c = new Color();
+      for (
+        let row = Math.max(0, Math.round(scorch.row) - r0);
+        row <= Math.min(n - 1, Math.round(scorch.row) + r0);
+        row++
+      ) {
+        for (
+          let col = Math.max(0, Math.round(scorch.col) - r0);
+          col <= Math.min(n - 1, Math.round(scorch.col) + r0);
+          col++
+        ) {
+          const d = Math.hypot(col - scorch.col, row - scorch.row);
+          if (d > reach) continue;
+          const i = row * n + col;
+          const k = clamp01(1.15 - d / reach) * 0.85;
+          c.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i)).lerp(this.charred, k);
+          colors.setXYZ(i, c.r, c.g, c.b);
+        }
+      }
+      colors.needsUpdate = true;
+    }
+    tp.needsUpdate = true;
+    terrain.computeVertexNormals();
+
+    if (this.waterMesh) {
+      const wp = this.waterMesh.geometry.getAttribute('position') as BufferAttribute;
+      for (let i = 0; i < n * n; i++) {
+        const depth = region.water[i]!;
+        const surface =
+          depth > 0.05 ? Math.max(region.height[i]!, 0) + depth : region.height[i]! - 6;
+        wp.setY(i, (Math.max(surface, -80) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION);
+      }
+      wp.needsUpdate = true;
+      this.waterMesh.geometry.computeVertexNormals();
+    }
+    if (this.fireMesh) {
+      const fp = this.fireMesh.geometry.getAttribute('position') as BufferAttribute;
+      for (let i = 0; i < n * n; i++) {
+        fp.setY(
+          i,
+          (Math.max(region.height[i]!, -40) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION + 0.03,
+        );
+      }
+      fp.needsUpdate = true;
+    }
+
+    // Structures: re-seat on the new ground, hide anything the sim removed.
+    const m = new Matrix4();
+    const pos = new Vector3();
+    const quat = new Quaternion();
+    const scale = new Vector3();
+    for (const set of this.structureSets) {
+      for (let k = 0; k < set.cells.length; k++) {
+        const cell = set.cells[k]!;
+        set.mesh.getMatrixAt(k, m);
+        m.decompose(pos, quat, scale);
+        if (scale.x === 0) continue;
+        if (region.structHP[cell]! <= 0 || region.structure[cell] === Structure.None) {
+          m.makeScale(0, 0, 0);
+        } else {
+          pos.y = this.heightAt(pos.x, pos.z);
+          m.compose(pos, quat, scale);
+        }
+        set.mesh.setMatrixAt(k, m);
+      }
+      set.mesh.instanceMatrix.needsUpdate = true;
+    }
+    // Trees: cleared ground (fuel erased without burning) loses its trees.
+    const trees = this.trees;
+    if (trees) {
+      for (let k = 0; k < trees.cells.length; k++) {
+        const cell = trees.cells[k]!;
+        if (trees.gone[k] === 2) continue;
+        trees.mesh.getMatrixAt(k, m);
+        m.decompose(pos, quat, scale);
+        if (region.fuel[cell]! <= 0 && region.fireState[cell] === FireState.Unburnt) {
+          trees.gone[k] = 2;
+          m.makeScale(0, 0, 0);
+        } else {
+          pos.y = this.heightAt(pos.x, pos.z);
+          m.compose(pos, quat, scale);
+        }
+        trees.mesh.setMatrixAt(k, m);
+      }
+      trees.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   private track<T extends { dispose(): void }>(item: T): T {
@@ -461,6 +580,7 @@ export class RegionView {
       });
       this.track({ dispose: () => mesh.dispose() });
       this.group.add(mesh);
+      this.structureSets.push({ mesh, cells });
     };
     place(houses, houseGeo, [0xe8dcc6, 0xd9a58a, 0xc7d2d8, 0xe6c88f, 0xb78b6e], 1);
     place(towers, towerGeo, [0x9fb0bd, 0xb6bcc2, 0x8c9aa6], 1.6);
