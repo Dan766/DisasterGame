@@ -9,6 +9,7 @@ import { ImpactFx } from './render/globe/ImpactFx';
 import { ashOpacity } from './render/globe/surfaceTextures';
 import { RegionFx } from './render/region/RegionFx';
 import { FireEmitter } from './render/fx/FireEmitter';
+import { PostFX } from './render/fx/PostFX';
 import { RegionView } from './render/region/RegionView';
 import { createStarfield } from './render/Starfield';
 import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
@@ -459,10 +460,13 @@ function updateTargeting() {
   });
 }
 
+const postFx = new PostFX(renderer, regionView.scene, regionCamera);
+
 function resize() {
   const { clientWidth: w, clientHeight: h } = canvas;
   if (w === 0 || h === 0) return; // minimized/collapsed: keep the last valid size
   renderer.setSize(w, h, false);
+  postFx.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   regionCamera.aspect = w / h;
@@ -560,7 +564,7 @@ renderer.setAnimationLoop((now) => {
   if (mode === 'region') {
     const shakeOffset = regionFx.shakeOffset(new THREE.Vector3()).multiplyScalar(6);
     regionCamera.position.add(shakeOffset);
-    renderer.render(regionView.scene, regionCamera);
+    postFx.render(regionView.scene, regionCamera);
     regionCamera.position.sub(shakeOffset);
   } else renderer.render(scene, camera);
   stats.end();
