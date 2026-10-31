@@ -99,3 +99,60 @@ describe('structure damage', () => {
     expect(alive + sim.damage.deaths).toBeCloseTo(total, 4);
   });
 });
+
+describe('asteroid impact (region)', () => {
+  const spec = {
+    col: 128,
+    row: 128,
+    craterRadiusCells: 6,
+    blastRadiusCells: 30,
+    thermalRadiusCells: 40,
+  };
+
+  function town(r: ReturnType<typeof forest>) {
+    let total = 0;
+    for (let k = 0; k < 120; k += 2) {
+      const i = 128 * REGION_SIZE + 128 + k - 60;
+      r.structure[i] = Structure.House;
+      r.structHP[i] = 1;
+      r.population[i] = 10;
+      total += 10;
+    }
+    return total;
+  }
+
+  it('carves a crater lower at the center with a raised rim', () => {
+    const r = forest(3);
+    r.height.fill(100);
+    const sim = new RegionSim(r);
+    sim.impact(spec);
+    expect(r.height[128 * REGION_SIZE + 128]!).toBeLessThan(100 - 10);
+    expect(r.height[128 * REGION_SIZE + 128 + 7]!).toBeGreaterThan(100);
+    expect(sim.craters).toHaveLength(1);
+  });
+
+  it('ignites the thermal zone and levels structures as the shockwave passes, conserving people', () => {
+    const r = forest(3);
+    const total = town(r);
+    const sim = new RegionSim(r);
+    expect(sim.impact(spec)).toBeGreaterThan(50);
+    expect(sim.damage.structuresLost).toBeGreaterThan(0); // direct hits
+    const before = sim.damage.structuresLost;
+    for (let t = 0; t < 200; t++) sim.step();
+    expect(sim.damage.structuresLost).toBeGreaterThan(before);
+    expect(sim.shockwaves).toHaveLength(0);
+    const alive = r.population.reduce((a, b) => a + b, 0);
+    expect(alive + sim.damage.deaths).toBeCloseTo(total, 4);
+  });
+
+  it('airbursts (no crater) still blast but leave terrain untouched', () => {
+    const r = forest(3);
+    r.height.fill(50);
+    town(r);
+    const sim = new RegionSim(r);
+    sim.impact({ ...spec, craterRadiusCells: 0 });
+    for (let t = 0; t < 200; t++) sim.step();
+    expect(r.height.every((h) => h === 50)).toBe(true);
+    expect(sim.damage.structuresLost).toBeGreaterThan(0);
+  });
+});

@@ -6,6 +6,14 @@
 import { createRng, type Rng } from '../core/rng';
 import type { RegionWorld } from './region';
 import { igniteDisk, stepFire, type FireStepResult } from './systems/fire';
+import {
+  carveCrater,
+  igniteFireball,
+  startShockwave,
+  stepShockwave,
+  type ImpactSpec,
+  type Shockwave,
+} from './systems/impact';
 import { createLedger, type DamageLedger } from './systems/structureDamage';
 import { createWind, stepWind, type WindField } from './systems/wind';
 
@@ -24,6 +32,11 @@ export class RegionSim {
   /** Casualties and collapsed structures since the region was entered. */
   readonly damage: DamageLedger = createLedger();
 
+  /** Active shockwaves (for the view's ring effect). */
+  readonly shockwaves: Shockwave[] = [];
+  /** Craters carved this visit, in order. */
+  readonly craters: { col: number; row: number; radiusCells: number }[] = [];
+
   private readonly fireRng: Rng;
 
   constructor(
@@ -39,9 +52,26 @@ export class RegionSim {
     return igniteDisk(this.region, col, row, radiusCells, intensity, this.fireRng);
   }
 
+  /**
+   * Resolves an impact: carves the crater, lights the fireball ignition zone and launches
+   * the shockwave. Returns the number of cells ignited.
+   */
+  impact(spec: ImpactSpec): number {
+    carveCrater(this.region, spec.col, spec.row, spec.craterRadiusCells, this.damage);
+    if (spec.craterRadiusCells > 0) {
+      this.craters.push({ col: spec.col, row: spec.row, radiusCells: spec.craterRadiusCells });
+    }
+    this.shockwaves.push(startShockwave(spec));
+    return igniteFireball(this.region, spec.col, spec.row, spec.thermalRadiusCells, this.fireRng);
+  }
+
   /** Advances all region systems by one fixed tick. */
   step(dt: number = REGION_DT): FireStepResult {
     stepWind(this.wind, dt);
+    for (let k = this.shockwaves.length - 1; k >= 0; k--) {
+      if (!stepShockwave(this.region, this.shockwaves[k]!, dt, this.damage))
+        this.shockwaves.splice(k, 1);
+    }
     this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt, this.damage);
     this.elapsed += dt;
     return this.lastFire;

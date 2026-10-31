@@ -383,13 +383,13 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 - [x] Fire view: burn overlay data texture on the terrain (burning = animated orange, burnt = charcoal); burnt/removed tree instances.
 - [x] Debug ignite: click-to-ignite in the region (becomes the real wildfire disaster in M5), so fire can be tuned by eye.
 - [x] `systems/structureDamage.ts`: structure HP, collapse → casualties, debris events (ledger). Fire's structure damage goes through this API so casualties are counted in one place.
-- [ ] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
+- [x] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
 - [ ] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.
 - [ ] `RegionDelta` persistence: record craters + burn mask (RLE) + destroyed structures on exit, replay on re-entry.
 - [ ] Global asteroid impacts generate their local crater + fires when the region is entered later.
 - [ ] Wind settings UI (direction/speed in the world panel).
 - [x] Tests: fire spreads faster downwind; fire does not cross a water barrier.
-- [ ] Tests: crater depth > 0 at center; damage conserves population (alive + dead = initial); a revisited region reproduces the burn mask.
+- [ ] Tests: crater depth > 0 at center (done); damage conserves population (done); a revisited region reproduces the burn mask.
 - **Done when:** an impact in a forested region carves a crater, levels a town and starts a wildfire that spreads with the wind; leaving and re-entering shows the same scars. **First chain reaction.**
 
 ### M4b — Region FX (2 days)
