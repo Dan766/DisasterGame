@@ -8,6 +8,7 @@
  * Fire is blocked by water, partially by roads, and cannot re-enter burnt cells.
  */
 import { FireState, Structure, type RegionWorld } from '../region';
+import { Lethality, createLedger, damageStructure, type DamageLedger } from './structureDamage';
 import type { Rng } from '../../core/rng';
 import { windAt, type WindField } from './wind';
 
@@ -79,8 +80,9 @@ export function stepFire(
   wind: WindField,
   rng: Rng,
   dt: number,
+  ledger: DamageLedger = createLedger(),
 ): FireStepResult {
-  const { size, fireState, heat, fuel, moisture, water, height, structure, structHP } = region;
+  const { size, fireState, heat, fuel, moisture, water, height, structure } = region;
   const result: FireStepResult = { ignited: 0, burntOut: 0, burning: 0, structuresLost: 0 };
   const toIgnite: number[] = [];
 
@@ -114,10 +116,10 @@ export function stepFire(
         if (rng.chance(p)) toIgnite.push(n);
       }
 
-      // Heat damages structures in the burning cell.
-      if (structure[i] !== Structure.None && structure[i] !== Structure.Road && structHP[i]! > 0) {
-        structHP[i] = Math.max(0, structHP[i]! - STRUCTURE_BURN_DPS * dt);
-        if (structHP[i] === 0) result.structuresLost++;
+      // Heat damages structures in the burning cell (collapses and deaths go via the ledger).
+      if (structure[i] !== Structure.None && structure[i] !== Structure.Road) {
+        const hp = STRUCTURE_BURN_DPS * dt;
+        if (damageStructure(region, i, hp, Lethality.Fire, ledger)) result.structuresLost++;
       }
 
       heat[i] = heat[i]! - dt;

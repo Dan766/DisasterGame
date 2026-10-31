@@ -121,7 +121,7 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 2. Add high-frequency fBm detail scaled by biome (mountains rough, plains flat).
 3. Carve 1–3 rivers by downhill flow from high points.
 4. Set fuel and moisture from biome plus noise.
-5. Place settlements by distributing the global population into town clusters (Poisson-disk), with a road network (MST between towns, terrain-cost A*).
+5. Place settlements by distributing the global population into town clusters (Poisson-disk), with a road network (MST between towns, terrain-cost A\*).
 6. **Apply persistent scars**: replay this region's stored delta (craters, burn mask, destroyed structures).
 
 ### 3.6 Cross-scale sync ("one world")
@@ -142,7 +142,7 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 └──────────────────────────────────────────────┘      └─────────────────────────┘
 ```
 
-- **Hard rule: `src/sim/**` never imports three.js or the DOM.** It works on typed arrays only. That keeps the sim testable in Vitest and lets it move to a Web Worker later with no rewrite.
+- **Hard rule: `src/sim/**` never imports three.js or the DOM.\*\* It works on typed arrays only. That keeps the sim testable in Vitest and lets it move to a Web Worker later with no rewrite.
 - **Fixed timestep:** the region uses 10 Hz sim ticks (`dt = 0.1 s` game time × speed multiplier). The globe uses 1 Hz ticks where 1 tick = 1 game-day. Rendering interpolates.
 - **Commands:** all player actions are serializable commands (`{type:'spawn', disaster:'asteroid', params, target}`). This gives free replay and debugging, and makes the worker move trivial.
 - **Determinism:** a seeded PRNG (mulberry32 / sfc32) per system. No `Math.random` in sim code.
@@ -382,7 +382,7 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 - [x] Region tick loop: 10 Hz fixed-step region sim in `main.ts` (wind → fire → damage), paused/sped up by the time controls.
 - [x] Fire view: burn overlay data texture on the terrain (burning = animated orange, burnt = charcoal); burnt/removed tree instances.
 - [x] Debug ignite: click-to-ignite in the region (becomes the real wildfire disaster in M5), so fire can be tuned by eye.
-- [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events. Fire's structure damage moves behind this API so casualties are counted in one place.
+- [x] `systems/structureDamage.ts`: structure HP, collapse → casualties, debris events (ledger). Fire's structure damage goes through this API so casualties are counted in one place.
 - [ ] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
 - [ ] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.
 - [ ] `RegionDelta` persistence: record craters + burn mask (RLE) + destroyed structures on exit, replay on re-entry.

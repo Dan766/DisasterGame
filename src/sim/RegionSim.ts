@@ -1,11 +1,12 @@
 /**
  * Regional simulation driver (DESIGN.md §4): owns the wind field and the RNG stream for
  * one region and advances the shared field systems in a fixed order each tick
- * (wind → fire). Pure typed-array code, so it is deterministic and worker-ready.
+ * (wind → fire → damage ledger). Pure typed-array code, so it is deterministic and worker-ready.
  */
 import { createRng, type Rng } from '../core/rng';
 import type { RegionWorld } from './region';
 import { igniteDisk, stepFire, type FireStepResult } from './systems/fire';
+import { createLedger, type DamageLedger } from './systems/structureDamage';
 import { createWind, stepWind, type WindField } from './systems/wind';
 
 /** Region ticks per real second at 1× (DESIGN.md §4: 10 Hz). */
@@ -19,6 +20,9 @@ export class RegionSim {
   elapsed = 0;
   /** Result of the most recent fire step. */
   lastFire: FireStepResult = { ignited: 0, burntOut: 0, burning: 0, structuresLost: 0 };
+
+  /** Casualties and collapsed structures since the region was entered. */
+  readonly damage: DamageLedger = createLedger();
 
   private readonly fireRng: Rng;
 
@@ -38,7 +42,7 @@ export class RegionSim {
   /** Advances all region systems by one fixed tick. */
   step(dt: number = REGION_DT): FireStepResult {
     stepWind(this.wind, dt);
-    this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt);
+    this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt, this.damage);
     this.elapsed += dt;
     return this.lastFire;
   }
