@@ -180,12 +180,32 @@ window.addEventListener('pointerup', (e) => {
 });
 
 function handleClick(x: number, y: number) {
+  if (mode === 'region') return igniteAt(x, y);
   if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
   if (!def?.spawnGlobe) return;
   const hit = picker.pick(x, y, camera, canvas);
   if (!hit) return;
   launch(def.id, disasterPanel.currentParams, hit);
+}
+
+/** Debug ignite (becomes the wildfire disaster in M5): click the terrain to start a fire. */
+const igniteRay = new THREE.Raycaster();
+function igniteAt(x: number, y: number) {
+  if (!regionSim || transition.active) return;
+  const rect = canvas.getBoundingClientRect();
+  igniteRay.setFromCamera(
+    new THREE.Vector2(
+      ((x - rect.left) / rect.width) * 2 - 1,
+      -((y - rect.top) / rect.height) * 2 + 1,
+    ),
+    regionCamera,
+  );
+  const cell = regionView.pickCell(igniteRay.ray.origin, igniteRay.ray.direction);
+  if (!cell) return;
+  if (regionSim.ignite(cell.col, cell.row) > 0) {
+    regionView.updateFire(regionSim.region, performance.now() / 1000);
+  }
 }
 
 // Double-click dives into the region (with a disaster armed, use Enter instead so

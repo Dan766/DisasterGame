@@ -36,3 +36,13 @@ describe('RegionSim', () => {
     expect(Array.from(a.fireState)).toEqual(Array.from(b.fireState));
   });
 });
+
+describe('RegionSim.ignite', () => {
+  it('starts fires in a brush around a cell on burnable ground', () => {
+    const r = forest(2);
+    const sim = new RegionSim(r);
+    const n = sim.ignite(100, 100, 3, 1);
+    expect(n).toBeGreaterThan(10);
+    expect(r.fireState[100 * REGION_SIZE + 100]).toBe(FireState.Burning);
+  });
+});

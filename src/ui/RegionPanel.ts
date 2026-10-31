@@ -28,7 +28,7 @@ export class RegionPanel {
         largest ? `${region.towns.length} · ${largest.name}` : 'none'
       }</b></div>
       <div class="stat"><span>Population</span><b>${formatPopulation(people)}</b></div>
-      <div class="hint">Drag to orbit · right-drag to pan · wheel to zoom</div>
+      <div class="hint">Drag to orbit · right-drag to pan · wheel to zoom · click to ignite</div>
       <button type="button">Back to globe (Esc)</button>`;
     this.el.hidden = false;
   }

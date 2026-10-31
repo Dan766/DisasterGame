@@ -181,6 +181,44 @@ export class RegionView {
   /** Half the region edge in world units. */
   readonly halfExtent = HALF;
 
+  /**
+   * Ray-marches a world-space ray onto the terrain and returns the (fractional) cell it
+   * lands on, or null if it misses the region. Cell coords match `heightAtCell`.
+   */
+  pickCell(origin: Vector3, dir: Vector3): { col: number; row: number } | null {
+    if (!this.region) return null;
+    const STEP = 1;
+    const MAX_DIST = 4000;
+    let prevT = 0;
+    for (let t = 0; t < MAX_DIST; t += STEP) {
+      const x = origin.x + dir.x * t;
+      const y = origin.y + dir.y * t;
+      const z = origin.z + dir.z * t;
+      if (Math.abs(x) > HALF || Math.abs(z) > HALF) {
+        if (t > 0 && dir.y >= 0) return null;
+        prevT = t;
+        continue;
+      }
+      if (y <= this.heightAt(x, z)) {
+        // Refine between the last outside sample and this one.
+        let lo = prevT;
+        let hi = t;
+        for (let i = 0; i < 8; i++) {
+          const mid = (lo + hi) / 2;
+          const inside =
+            origin.y + dir.y * mid <= this.heightAt(origin.x + dir.x * mid, origin.z + dir.z * mid);
+          if (inside) hi = mid;
+          else lo = mid;
+        }
+        const hx = origin.x + dir.x * hi;
+        const hz = origin.z + dir.z * hi;
+        return { col: hx + HALF - 0.5, row: hz + HALF - 0.5 };
+      }
+      prevT = t;
+    }
+    return null;
+  }
+
   show(region: RegionWorld): void {
     this.clear();
     this.region = region;

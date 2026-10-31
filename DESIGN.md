@@ -381,7 +381,7 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 - [x] `systems/wind.ts`: base wind field + decaying gust perturbations.
 - [x] Region tick loop: 10 Hz fixed-step region sim in `main.ts` (wind → fire → damage), paused/sped up by the time controls.
 - [x] Fire view: burn overlay data texture on the terrain (burning = animated orange, burnt = charcoal); burnt/removed tree instances.
-- [ ] Debug ignite: click-to-ignite in the region (becomes the real wildfire disaster in M5), so fire can be tuned by eye.
+- [x] Debug ignite: click-to-ignite in the region (becomes the real wildfire disaster in M5), so fire can be tuned by eye.
 - [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events. Fire's structure damage moves behind this API so casualties are counted in one place.
 - [ ] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
 - [ ] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.

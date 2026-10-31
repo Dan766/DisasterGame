@@ -5,7 +5,7 @@
  */
 import { createRng, type Rng } from '../core/rng';
 import type { RegionWorld } from './region';
-import { stepFire, type FireStepResult } from './systems/fire';
+import { igniteDisk, stepFire, type FireStepResult } from './systems/fire';
 import { createWind, stepWind, type WindField } from './systems/wind';
 
 /** Region ticks per real second at 1× (DESIGN.md §4: 10 Hz). */
@@ -28,6 +28,11 @@ export class RegionSim {
   ) {
     this.wind = wind;
     this.fireRng = createRng(region.seed).fork('fire');
+  }
+
+  /** Debug/wildfire ignition brush at a (fractional) cell. Returns how many cells caught. */
+  ignite(col: number, row: number, radiusCells = 2, intensity = 0.9): number {
+    return igniteDisk(this.region, col, row, radiusCells, intensity, this.fireRng);
   }
 
   /** Advances all region systems by one fixed tick. */
