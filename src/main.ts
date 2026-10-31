@@ -18,6 +18,7 @@ import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
 import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { RegionDeltaStore, regionId } from './sim/region';
+import { captureDelta } from './sim/systems/persistence';
 import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
 import { meanAsh } from './sim/systems/atmosphere';
 import { impactSpecFromKm } from './sim/systems/impact';
@@ -292,6 +293,7 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         regionDeltas.get(regionId(center.lat, center.lon)),
       );
       regionView.show(region);
+      regionView.updateFire(region, performance.now() / 1000);
       regionSim = new RegionSim(region);
       regionPanel.show(region);
       hud.classList.add('region-mode');
@@ -338,6 +340,10 @@ async function exitRegion(): Promise<void> {
       mode = 'globe';
       hud.classList.remove('region-mode');
       regionPanel.hide();
+      if (regionSim) {
+        const id = regionSim.region.id;
+        regionDeltas.set(id, captureDelta(regionSim.region, regionSim, regionDeltas.get(id)));
+      }
       regionView.clear();
       regionFx.clear();
       regionView.scene.add(regionFx.group);

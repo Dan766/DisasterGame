@@ -21,6 +21,7 @@ import {
   type RegionWorld,
   type Town,
 } from '../region';
+import { applyDelta } from '../systems/persistence';
 import { Biome, type GlobalWorld } from '../world';
 
 const S = REGION_SIZE;
@@ -92,12 +93,7 @@ export function generateRegion(
   growVegetation(region, slope, climateNoise);
   settle(region, world, center.lat, slope, rng.fork('towns'), detailNoise);
 
-  if (delta) {
-    for (const id of delta.destroyedStructIds) {
-      region.structure[id] = Structure.None;
-      region.structHP[id] = 0;
-    }
-  }
+  if (delta) applyDelta(region, delta);
   return region;
 }
 

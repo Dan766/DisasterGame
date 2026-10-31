@@ -25,14 +25,16 @@ export interface Town {
 /** Persistent scars on a region; base terrain is always regenerated from the seed. */
 export interface RegionDelta {
   craters: { col: number; row: number; radiusCells: number }[];
-  /** Run-length encoded burn mask (empty until fire lands in M4). */
+  /** Run-length encoded burn mask (alternating run lengths, starting with unburnt). */
   burnMaskRLE: number[];
   destroyedStructIds: number[];
+  /** Flat `[cell, population, ...]` pairs: residents left in cells whose structure collapsed. */
+  survivors: number[];
   deaths: number;
 }
 
 export function emptyDelta(): RegionDelta {
-  return { craters: [], burnMaskRLE: [], destroyedStructIds: [], deaths: 0 };
+  return { craters: [], burnMaskRLE: [], destroyedStructIds: [], survivors: [], deaths: 0 };
 }
 
 /** In-memory per-region delta store, keyed by region id. IndexedDB comes later. */
@@ -50,6 +52,10 @@ export class RegionDeltaStore {
       this.deltas.set(id, delta);
     }
     return delta;
+  }
+
+  set(id: string, delta: RegionDelta): void {
+    this.deltas.set(id, delta);
   }
 
   clear(): void {
