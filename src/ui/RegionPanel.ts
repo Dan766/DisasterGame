@@ -57,7 +57,7 @@ export class RegionPanel {
           <input type="range" data-wind="speed" min="0" max="30" step="0.5" value="${wind.speed}" />
         </label>
       </div>
-      <div class="hint">Drag to orbit · right-drag to pan · wheel to zoom · click to ignite (or strike / touch down, with Asteroid / Tornado armed)</div>
+      <div class="hint">Drag to orbit · right-drag to pan · wheel to zoom · click to ignite (or strike / touch down, with Asteroid / Tornado armed; Wildfire sets the brush)</div>
       <button type="button">Back to globe (Esc)</button>`;
     this.updateWindLabels();
     this.el.hidden = false;

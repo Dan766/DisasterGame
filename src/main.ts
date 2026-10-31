@@ -17,6 +17,7 @@ import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transit
 import { GlobeSim } from './sim/GlobeSim';
 import { asteroidEffects, parseAsteroidParams } from './sim/disasters/asteroid';
 import { tornadoSpecFromParams } from './sim/disasters/tornado';
+import { wildfireSpecFromParams } from './sim/disasters/wildfire';
 import { DISASTERS } from './sim/disasters/registry';
 import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
@@ -198,7 +199,8 @@ function handleClick(x: number, y: number) {
     if (def?.id === 'asteroid' && def.scales.includes('region'))
       return strikeRegionAt(x, y, disasterPanel.currentParams);
     if (def?.id === 'tornado') return spawnTornadoAt(x, y, disasterPanel.currentParams);
-    return igniteAt(x, y);
+    if (def?.id === 'wildfire') return igniteAt(x, y, disasterPanel.currentParams);
+    return igniteAt(x, y); // no disaster armed: quick default ignite
   }
   if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
@@ -208,9 +210,9 @@ function handleClick(x: number, y: number) {
   launch(def.id, disasterPanel.currentParams, hit);
 }
 
-/** Debug ignite (becomes the wildfire disaster in M5): click the terrain to start a fire. */
+/** Wildfire brush: click the terrain to start a fire (default brush when nothing is armed). */
 const igniteRay = new THREE.Raycaster();
-function igniteAt(x: number, y: number) {
+function igniteAt(x: number, y: number, params?: Params) {
   if (!regionSim || transition.active) return;
   const rect = canvas.getBoundingClientRect();
   igniteRay.setFromCamera(
@@ -222,7 +224,8 @@ function igniteAt(x: number, y: number) {
   );
   const cell = regionView.pickCell(igniteRay.ray.origin, igniteRay.ray.direction);
   if (!cell) return;
-  if (regionSim.ignite(cell.col, cell.row) > 0) {
+  const brush = params ? wildfireSpecFromParams(params) : null;
+  if (regionSim.ignite(cell.col, cell.row, brush?.radiusCells, brush?.intensity) > 0) {
     regionView.updateFire(regionSim.region, performance.now() / 1000);
   }
 }
