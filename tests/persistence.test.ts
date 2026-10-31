@@ -3,7 +3,13 @@ import { generateGlobe } from '../src/sim/gen/globe';
 import { generateRegion } from '../src/sim/gen/region';
 import { RegionSim } from '../src/sim/RegionSim';
 import { FireState, RegionDeltaStore, Structure } from '../src/sim/region';
-import { captureDelta, rleDecode, rleEncode } from '../src/sim/systems/persistence';
+import {
+  applyPendingStrikes,
+  captureDelta,
+  rleDecode,
+  rleEncode,
+  strikeToCell,
+} from '../src/sim/systems/persistence';
 import { cellAt } from '../src/sim/world';
 
 const world = generateGlobe('persist-seed');
@@ -85,5 +91,48 @@ describe('RegionDelta persistence', () => {
       if (r2.fireState[i] !== FireState.Unburnt) expect(r3.fireState[i]).toBe(FireState.Burnt);
     }
     expect(cellAt(world, city.lat, city.lon)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('global strikes replayed on region entry', () => {
+  const strike = (lat: number, lon: number) => ({
+    lat,
+    lon,
+    craterRadiusKm: 0.4,
+    blastRadiusKm: 2,
+    thermalRadiusKm: 1.5,
+  });
+
+  it('carves a crater and burns the area, then is not applied twice', () => {
+    const store = new RegionDeltaStore();
+    const base = generateRegion(world, city.lat, city.lon);
+    const first = generateRegion(world, city.lat, city.lon);
+    store.recordStrike(strike(base.lat, base.lon));
+    const delta = applyPendingStrikes(first, store.strikes, store.get(first.id))!;
+    expect(delta).not.toBeNull();
+    const c = Math.round(strikeToCell(first, base.lat, base.lon).col);
+    const i = c * first.size + c;
+    expect(first.height[i]!).toBeLessThan(base.height[i]!);
+    expect(delta.craters).toHaveLength(1);
+    expect(delta.strikesApplied).toBe(1);
+    store.set(first.id, delta);
+
+    // Re-entry replays the stored delta and does not re-apply the strike.
+    const again = generateRegion(world, city.lat, city.lon, store.get(first.id));
+    expect(Array.from(again.height)).toEqual(Array.from(first.height));
+    expect(applyPendingStrikes(again, store.strikes, store.get(first.id))).toBeNull();
+  });
+
+  it('ignores strikes far from the region', () => {
+    const region = generateRegion(world, city.lat, city.lon);
+    const far = strike(region.lat + 5, region.lon);
+    expect(applyPendingStrikes(region, [far])).toBeNull();
+  });
+
+  it('a strike just outside the region still blasts its edge', () => {
+    const region = generateRegion(world, city.lat, city.lon);
+    const edgeLat = region.lat + (130 * 100) / 111_320 + 0.01;
+    const s = { ...strike(edgeLat, region.lon), craterRadiusKm: 0, blastRadiusKm: 4 };
+    expect(applyPendingStrikes(region, [s])).not.toBeNull();
   });
 });

@@ -14,6 +14,7 @@ import {
   REGION_CELL_M,
   REGION_EXTENT_KM,
   REGION_SIZE,
+  M_PER_DEG_LAT,
   Structure,
   createRegionWorld,
   regionId,
@@ -25,7 +26,6 @@ import { applyDelta } from '../systems/persistence';
 import { Biome, type GlobalWorld } from '../world';
 
 const S = REGION_SIZE;
-const M_PER_DEG_LAT = 111_320;
 /** Fuel loading by biome before noise. */
 const FUEL_BY_BIOME: Record<number, number> = {
   [Biome.Ocean]: 0,

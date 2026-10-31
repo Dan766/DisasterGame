@@ -3,9 +3,24 @@
  * (craters, burn mask, collapsed structures) and replays them on top of the regenerated
  * base terrain, so a revisited region looks the way it was left.
  */
-import { FireState, Structure, type RegionDelta, type RegionWorld } from '../region';
-import { carveCrater } from './impact';
+import { degToRad } from '../../core/geo';
+import { createRng } from '../../core/rng';
+import {
+  FireState,
+  M_PER_DEG_LAT,
+  REGION_CELL_M,
+  Structure,
+  type GlobalStrike,
+  type RegionDelta,
+  type RegionWorld,
+} from '../region';
+import { stepFire } from './fire';
+import { applyBlast, carveCrater, igniteFireball, impactSpecFromKm } from './impact';
 import { createLedger, type DamageLedger } from './structureDamage';
+import { createWind } from './wind';
+
+/** Fixed-step ticks (0.1 s each) the aftermath fire is allowed to spread before it is frozen. */
+const AFTERMATH_FIRE_TICKS = 300;
 
 /** Encodes a 0/1 mask as alternating run lengths, starting with a run of zeros (may be 0). */
 export function rleEncode(mask: ArrayLike<number>): number[] {
@@ -68,6 +83,7 @@ export function captureDelta(
     destroyedStructIds: [...destroyed].sort((a, b) => a - b),
     survivors: [...survivors].flat(),
     deaths: (prior?.deaths ?? 0) + visit.damage.deaths,
+    strikesApplied: prior?.strikesApplied ?? 0,
   };
 }
 
@@ -93,4 +109,65 @@ export function applyDelta(region: RegionWorld, delta: RegionDelta): void {
     region.fuel[i] = 0;
     region.heat[i] = 0;
   }
+}
+
+/** Fractional (col, row) of a lat/lon within a region; cell centers sit on integers. */
+export function strikeToCell(region: RegionWorld, lat: number, lon: number) {
+  const cosLat = Math.max(0.05, Math.cos(degToRad(region.lat)));
+  const dLon = ((((lon - region.lon + 180) % 360) + 360) % 360) - 180;
+  return {
+    col: region.size / 2 - 0.5 + (dLon * M_PER_DEG_LAT * cosLat) / REGION_CELL_M,
+    row: region.size / 2 - 0.5 - ((lat - region.lat) * M_PER_DEG_LAT) / REGION_CELL_M,
+  };
+}
+
+/**
+ * Plays globe strikes this region has not seen yet onto it, in order: crater, instant blast
+ * damage, fireball ignition and a short burst of fire spread. Returns the updated delta to
+ * store, or null if nothing reached the region. The region must already have `prior` applied.
+ */
+export function applyPendingStrikes(
+  region: RegionWorld,
+  strikes: readonly GlobalStrike[],
+  prior?: RegionDelta,
+): RegionDelta | null {
+  const from = prior?.strikesApplied ?? 0;
+  if (from >= strikes.length) return null;
+
+  const ledger = createLedger();
+  const craters: RegionDelta['craters'] = [];
+  const rng = createRng(region.seed).fork('globe-strikes');
+  let touched = false;
+
+  for (let k = from; k < strikes.length; k++) {
+    const strike = strikes[k]!;
+    const { col, row } = strikeToCell(region, strike.lat, strike.lon);
+    const spec = impactSpecFromKm(col, row, strike);
+    // Distance from the strike to the nearest point of the region square.
+    const edge = region.size - 1;
+    const dx = Math.max(0, -col, col - edge);
+    const dy = Math.max(0, -row, row - edge);
+    const reach = Math.max(
+      spec.craterRadiusCells * 1.5,
+      spec.blastRadiusCells * 1.8,
+      spec.thermalRadiusCells,
+    );
+    if (Math.hypot(dx, dy) > reach) continue;
+    touched = true;
+
+    carveCrater(region, col, row, spec.craterRadiusCells, ledger);
+    if (spec.craterRadiusCells > 0) craters.push({ col, row, radiusCells: spec.craterRadiusCells });
+    applyBlast(region, col, row, spec.blastRadiusCells, ledger);
+    igniteFireball(region, col, row, spec.thermalRadiusCells, rng);
+  }
+  if (!touched) return null;
+
+  const wind = createWind();
+  for (let t = 0; t < AFTERMATH_FIRE_TICKS; t++) {
+    if (stepFire(region, wind, rng, 0.1, ledger).burning === 0) break;
+  }
+
+  const delta = captureDelta(region, { craters, damage: ledger }, prior);
+  delta.strikesApplied = strikes.length;
+  return delta;
 }

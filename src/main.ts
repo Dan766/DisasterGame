@@ -18,7 +18,7 @@ import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
 import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { RegionDeltaStore, regionId } from './sim/region';
-import { captureDelta } from './sim/systems/persistence';
+import { applyPendingStrikes, captureDelta } from './sim/systems/persistence';
 import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
 import { meanAsh } from './sim/systems/atmosphere';
 import { impactSpecFromKm } from './sim/systems/impact';
@@ -292,6 +292,13 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         center.lon,
         regionDeltas.get(regionId(center.lat, center.lon)),
       );
+      // Globe strikes since the last visit land on the region now (crater, blast, fires).
+      const caughtUp = applyPendingStrikes(
+        region,
+        regionDeltas.strikes,
+        regionDeltas.get(region.id),
+      );
+      if (caughtUp) regionDeltas.set(region.id, caughtUp);
       regionView.show(region);
       regionView.updateFire(region, performance.now() / 1000);
       regionSim = new RegionSim(region);
@@ -384,6 +391,13 @@ function launch(disaster: string, params: Params, hit: GlobePick) {
         target: { lat: hit.lat, lon: hit.lon },
       });
       if (!event) return;
+      regionDeltas.recordStrike({
+        lat: event.lat,
+        lon: event.lon,
+        craterRadiusKm: event.airburst ? 0 : event.craterRadiusKm,
+        blastRadiusKm: event.blastRadiusKm,
+        thermalRadiusKm: event.thermalRadiusKm,
+      });
       fx.detonate(hit.point, event.megatons, event.blastRadiusKm);
       globe.setCraters(world.craters);
       eventLog.add(event);

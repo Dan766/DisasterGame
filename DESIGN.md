@@ -386,7 +386,7 @@ The core sim loop in the region, visible and playable. Polish FX are deferred to
 - [x] Asteroid (region scale, sim): crater carved into `height` (bowl + raised rim), expanding shockwave that damages structures as it passes, thermal ignition → fire system.
 - [x] Asteroid (region scale, view): approach streak, flash, shockwave ring, terrain re-mesh after carving.
 - [x] `RegionDelta` persistence: record craters + burn mask (RLE) + destroyed structures on exit, replay on re-entry.
-- [ ] Global asteroid impacts generate their local crater + fires when the region is entered later.
+- [x] Global asteroid impacts generate their local crater + fires when the region is entered later.
 - [ ] Wind settings UI (direction/speed in the world panel).
 - [x] Tests: fire spreads faster downwind; fire does not cross a water barrier.
 - [x] Tests: crater depth > 0 at center (done); damage conserves population (done); a revisited region reproduces the burn mask.

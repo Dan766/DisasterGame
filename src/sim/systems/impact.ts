@@ -139,6 +139,33 @@ export function blastDamage(d: number, blastRadiusCells: number): number {
   return (BLAST_EDGE_DAMAGE * (edge - d)) / (edge - blastRadiusCells);
 }
 
+/** Applies the full shockwave damage field at once (for impacts that happened off-screen). */
+export function applyBlast(
+  region: RegionWorld,
+  col: number,
+  row: number,
+  blastRadiusCells: number,
+  ledger: DamageLedger,
+): void {
+  if (blastRadiusCells <= 0) return;
+  const s = region.size;
+  const reach = Math.ceil(blastRadiusCells * 1.8);
+  for (
+    let y = Math.max(0, Math.round(row) - reach);
+    y <= Math.min(s - 1, Math.round(row) + reach);
+    y++
+  ) {
+    for (
+      let x = Math.max(0, Math.round(col) - reach);
+      x <= Math.min(s - 1, Math.round(col) + reach);
+      x++
+    ) {
+      const dmg = blastDamage(Math.hypot(x - col, y - row), blastRadiusCells);
+      if (dmg > 0) damageStructure(region, y * s + x, dmg, Lethality.Blast, ledger);
+    }
+  }
+}
+
 /**
  * Advances the front by `dt`, damaging structures in the ring it swept.
  * Returns false once the wave has expired.

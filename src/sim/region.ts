@@ -31,15 +31,42 @@ export interface RegionDelta {
   /** Flat `[cell, population, ...]` pairs: residents left in cells whose structure collapsed. */
   survivors: number[];
   deaths: number;
+  /** How many globe-scale strikes (see `RegionDeltaStore.strikes`) were already folded in. */
+  strikesApplied: number;
 }
 
 export function emptyDelta(): RegionDelta {
-  return { craters: [], burnMaskRLE: [], destroyedStructIds: [], survivors: [], deaths: 0 };
+  return {
+    craters: [],
+    burnMaskRLE: [],
+    destroyedStructIds: [],
+    survivors: [],
+    deaths: 0,
+    strikesApplied: 0,
+  };
 }
+
+/** An asteroid that hit the globe; regions it reaches replay it the first time they are entered. */
+export interface GlobalStrike {
+  lat: number;
+  lon: number;
+  /** Zero for airbursts. */
+  craterRadiusKm: number;
+  blastRadiusKm: number;
+  thermalRadiusKm: number;
+}
+
+export const M_PER_DEG_LAT = 111_320;
 
 /** In-memory per-region delta store, keyed by region id. IndexedDB comes later. */
 export class RegionDeltaStore {
   private readonly deltas = new Map<string, RegionDelta>();
+  /** Globe-scale strikes in the order they happened. */
+  readonly strikes: GlobalStrike[] = [];
+
+  recordStrike(strike: GlobalStrike): void {
+    this.strikes.push({ ...strike });
+  }
 
   get(id: string): RegionDelta | undefined {
     return this.deltas.get(id);
@@ -60,6 +87,7 @@ export class RegionDeltaStore {
 
   clear(): void {
     this.deltas.clear();
+    this.strikes.length = 0;
   }
 }
 
