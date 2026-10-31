@@ -10,13 +10,15 @@
 An open sandbox where you look down on a living world and unleash disasters on it: asteroids, tornados, wildfires and more. You can watch them play out up close in a **regional view**, then pull back to the **globe** to see what you did to the planet.
 
 ### Pillars
+
 1. **Instant spectacle.** You can click and see something devastating within 5 seconds of loading.
 2. **Systemic, not scripted.** Disasters read and write shared world layers (terrain, water, fuel, heat, wind), so chain reactions emerge on their own.
 3. **Two scales, one world.** Regional events leave persistent scars and change global stats. Global events spawn local consequences.
 4. **Playful tone.** The look is stylized and toy-like. Population shows up as numbers and tiny buildings, never as visible individuals.
 
 ### Non-goals (v1)
-- Scientific accuracy (it only needs to be *plausible*)
+
+- Scientific accuracy (it only needs to be _plausible_)
 - Multiplayer
 - Mobile/touch optimization
 - Campaign or progression (scenarios come post-v1)
@@ -26,6 +28,7 @@ An open sandbox where you look down on a living world and unleash disasters on i
 ## 2. Player Experience
 
 ### Core loop
+
 ```
 Observe world → pick disaster + tune params → pick target → watch it unfold
       ↑                                                         ↓
@@ -33,6 +36,7 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 ```
 
 ### Session flow
+
 1. The game loads straight into the **globe**, slowly rotating, with a disaster palette on the left.
 2. The player chooses **Asteroid**, hovers the globe (a targeting reticle shows the blast radius preview), and clicks. The asteroid streaks in, flashes, leaves a crater, and an ash cloud spreads across the globe.
 3. The player double-clicks any point to **zoom into a region**. A camera dive plus fade loads a 25 km × 25 km diorama.
@@ -41,45 +45,50 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 6. Pressing **Esc** or zooming out returns to the globe. The region's damage now shows as a scar.
 
 ### Controls
-| Input | Globe | Region |
-|---|---|---|
-| Left-drag | Rotate globe | Pan |
-| Right-drag | — | Orbit camera |
-| Wheel | Zoom (past threshold → enter region) | Zoom (past threshold → exit to globe) |
-| Left-click | Fire selected disaster | Fire selected disaster |
-| Double-click | Enter region at point | — |
-| Space | Pause/resume | Pause/resume |
-| 1–4 | Time speed | Time speed |
-| Esc | Deselect disaster | Return to globe |
+
+| Input        | Globe                                | Region                                |
+| ------------ | ------------------------------------ | ------------------------------------- |
+| Left-drag    | Rotate globe                         | Pan                                   |
+| Right-drag   | —                                    | Orbit camera                          |
+| Wheel        | Zoom (past threshold → enter region) | Zoom (past threshold → exit to globe) |
+| Left-click   | Fire selected disaster               | Fire selected disaster                |
+| Double-click | Enter region at point                | —                                     |
+| Space        | Pause/resume                         | Pause/resume                          |
+| 1–4          | Time speed                           | Time speed                            |
+| Esc          | Deselect disaster                    | Return to globe                       |
 
 ---
 
 ## 3. World Model
 
 ### 3.1 Planet source
+
 **Decision: procedural planet (seeded) for v1.** A real-Earth data pack can come later.
+
 - Pros: no asset licensing, infinite worlds, and it avoids sensitivities around destroying real cities.
 - Real Earth (ETOPO/Blue Marble, public domain) stays possible later, because the globe is just a set of textures in the same format.
 
 ### 3.2 Global grid
+
 - **Equirectangular grid, 512 × 256 cells** (~0.7° per cell, ~78 km at the equator).
   - It's simple to index, maps 1:1 onto GPU textures, and pole distortion is acceptable for v1.
 - Layers are stored as typed arrays (`Float32Array`/`Uint8Array`, length 131,072):
 
-| Layer | Type | Meaning |
-|---|---|---|
-| `elevation` | f32 | meters, sea level = 0 |
-| `biome` | u8 | ocean, ice, tundra, forest, grassland, desert, jungle, mountain |
-| `population` | f32 | people in cell |
-| `baseTemp` | f32 | °C climate baseline (latitude + elevation) |
-| `ash` | f32 | atmospheric dust/ash optical depth 0–1 |
-| `fire` | f32 | fraction of cell burning 0–1 |
-| `damage` | f32 | fraction of infrastructure destroyed 0–1 |
-| `craters` | list | `{lat, lon, radiusKm}` for rendering + regen |
+| Layer        | Type | Meaning                                                         |
+| ------------ | ---- | --------------------------------------------------------------- |
+| `elevation`  | f32  | meters, sea level = 0                                           |
+| `biome`      | u8   | ocean, ice, tundra, forest, grassland, desert, jungle, mountain |
+| `population` | f32  | people in cell                                                  |
+| `baseTemp`   | f32  | °C climate baseline (latitude + elevation)                      |
+| `ash`        | f32  | atmospheric dust/ash optical depth 0–1                          |
+| `fire`       | f32  | fraction of cell burning 0–1                                    |
+| `damage`     | f32  | fraction of infrastructure destroyed 0–1                        |
+| `craters`    | list | `{lat, lon, radiusKm}` for rendering + regen                    |
 
 - **Global scalars:** `globalTempAnomaly`, `totalPopulation`, `casualties`, `damageUSD`, `simTime`.
 
 ### 3.3 Global generation
+
 1. Elevation = 3D simplex fBm sampled on the unit sphere (seamless, no poles seam), plus a continental mask and ridged noise for mountains.
 2. Sea level is set so ~65–70% of the surface is ocean.
 3. Base temperature = f(latitude, elevation).
@@ -88,24 +97,26 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 6. Population = biome habitability × coastal/river bonus × noise, then clustered into "cities" at peaks (stored as a city list with names from a syllable generator).
 
 ### 3.4 Regional grid
+
 - **256 × 256 cells at 100 m per cell → 25.6 km square.**
 - A region is identified by its center `(lat, lon)` and generated **deterministically** from `hash(worldSeed, lat, lon)`.
 - Layers:
 
-| Layer | Type | Meaning |
-|---|---|---|
-| `height` | f32 | meters |
-| `water` | f32 | water depth above terrain (m) |
-| `fuel` | f32 | burnable biomass 0–1 |
-| `moisture` | f32 | 0–1, dampens fire |
-| `fireState` | u8 | 0 unburnt, 1 burning, 2 burnt |
-| `heat` | f32 | fire intensity / ignition accumulator |
-| `windX`, `windY` | f32 | m/s, low-res field (32×32) upsampled |
-| `structure` | u8 | 0 none, 1 house, 2 tower, 3 road, 4 farm |
-| `structHP` | f32 | 0–1 |
-| `population` | f32 | people in cell |
+| Layer            | Type | Meaning                                  |
+| ---------------- | ---- | ---------------------------------------- |
+| `height`         | f32  | meters                                   |
+| `water`          | f32  | water depth above terrain (m)            |
+| `fuel`           | f32  | burnable biomass 0–1                     |
+| `moisture`       | f32  | 0–1, dampens fire                        |
+| `fireState`      | u8   | 0 unburnt, 1 burning, 2 burnt            |
+| `heat`           | f32  | fire intensity / ignition accumulator    |
+| `windX`, `windY` | f32  | m/s, low-res field (32×32) upsampled     |
+| `structure`      | u8   | 0 none, 1 house, 2 tower, 3 road, 4 farm |
+| `structHP`       | f32  | 0–1                                      |
+| `population`     | f32  | people in cell                           |
 
 ### 3.5 Regional generation
+
 1. Bilinearly sample the global `elevation`, `biome` and `population` at the region's footprint for the low-frequency shape.
 2. Add high-frequency fBm detail scaled by biome (mountains rough, plains flat).
 3. Carve 1–3 rivers by downhill flow from high points.
@@ -114,6 +125,7 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 6. **Apply persistent scars**: replay this region's stored delta (craters, burn mask, destroyed structures).
 
 ### 3.6 Cross-scale sync ("one world")
+
 - **Region → Globe:** when the player leaves a region, or every N sim-seconds, aggregate regional deltas (deaths, destroyed-structure fraction, burnt area) into the overlapping global cells' `population`, `damage` and `fire`.
 - **Globe → Region:** when a region is entered, global state seeds it. If a global-scale event already hit inside the footprint, the region generates its local consequences (a crater mesh, fires seeded at the ignition radius, an ash tint).
 - **Persistence:** `RegionDelta` = `{craters[], burnMaskRLE, destroyedStructIds[], deaths}` keyed by region id. These are kept in memory; IndexedDB comes later. They are small because the base terrain is always regenerated from the seed.
@@ -137,25 +149,29 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 - **Worker move (M6):** start single-threaded. Move to a worker with transferable buffers when profiling demands it. SharedArrayBuffer needs COOP/COEP headers, so avoid it unless necessary.
 
 ### 4.1 Disaster interface
+
 ```ts
 interface DisasterDef<P> {
-  id: string;                    // 'asteroid'
+  id: string; // 'asteroid'
   scales: ('globe' | 'region')[];
-  params: ParamSchema<P>;        // drives UI sliders automatically
-  preview(target, params): PreviewShape;   // reticle radius etc.
+  params: ParamSchema<P>; // drives UI sliders automatically
+  preview(target, params): PreviewShape; // reticle radius etc.
   spawn(world, target, params, rng): DisasterInstance;
 }
 
 interface DisasterInstance {
-  step(world, dt): void;         // mutate world layers
+  step(world, dt): void; // mutate world layers
   alive: boolean;
-  renderState(): unknown;        // plain data the view layer consumes
+  renderState(): unknown; // plain data the view layer consumes
 }
 ```
+
 Each disaster has a paired **view** in `src/render/disasters/<id>.ts` that turns `renderState()` into meshes and particles. Adding a disaster means writing one sim file, one view file, and one registry entry.
 
 ### 4.2 Shared field systems (always running in region)
+
 These run independently of disasters and are where chain reactions come from:
+
 - **Fire spread** (cellular automaton): a burning cell ignites neighbors with probability ∝ `fuel × (1 − moisture) × windAlignment × slopeBoost`. It burns for `fuel × k` seconds, then becomes `burnt`. Heat damages structures.
 - **Water flow** (virtual-pipes shallow water, coarse): handles rivers, floods and tsunami run-up. It's enabled only while water is perturbed.
 - **Wind field:** a 32 × 32 base wind plus local perturbations (tornado vortex, fire updraft).
@@ -166,9 +182,11 @@ These run independently of disasters and are where chain reactions come from:
 ## 5. Disasters (v1)
 
 ### 5.1 Asteroid — globe + region
+
 **Params:** diameter (10 m–10 km, log slider), velocity (11–70 km/s), angle (15–90°), composition (stony/iron/icy).
 
 **Model (plausible, simplified):**
+
 - Mass = ρ · (4/3)π r³, KE = ½ m v².
 - Energy is reported in megatons TNT (1 Mt = 4.184e15 J).
 - Crater diameter ≈ `k · E^(1/3.4)` (tuned so a 1 km impactor gives ~15–20 km).
@@ -181,9 +199,11 @@ These run independently of disasters and are where chain reactions come from:
 **Region effects:** a streak + flash + shockwave ring that expands at a visible speed and damages structures as it passes. The crater is carved into `height` (bowl + raised rim). Ejecta particles fly out. Fires ignite within the thermal radius, then hand off to the fire system (**chain reaction**).
 
 ### 5.2 Tornado — region
+
 **Params:** EF rating (0–5), lifetime (30 s–5 min game), path bias.
 
 **Model:**
+
 - A moving vortex agent. Its velocity = base wind + biased random walk (Perlin over time).
 - Damage radius by EF (EF0 ~50 m … EF5 ~400 m core). Damage falls off with distance.
 - It lifts and flings debris particles, strips fuel (vegetation), and damages structures by `EF × falloff × dt`.
@@ -193,6 +213,7 @@ These run independently of disasters and are where chain reactions come from:
 **Visual:** a funnel made of layered, scrolling noise-textured cylinders, plus a debris ring particle system and a dust skirt.
 
 ### 5.3 Wildfire — region
+
 **Params:** ignition point, initial size. Global wind (direction/speed) is a world setting.
 
 **Model:** uses the shared fire CA directly; this disaster is just an "ignite" command plus UI. Fire produces smoke particles and reduces `fuel`. It spreads faster uphill and downwind, and stops at water, roads (partially) and burnt areas.
@@ -200,26 +221,29 @@ These run independently of disasters and are where chain reactions come from:
 **Visual:** an emissive data texture over the terrain (burning = animated orange, burnt = charcoal), GPU-instanced smoke billboards, and trees swapped to burnt variants.
 
 ### 5.4 Post-v1 backlog (designed for, not built)
-| Disaster | Scale | Uses |
-|---|---|---|
-| Tsunami | region (spawned by ocean impact/quake) | water flow |
-| Earthquake | region + globe | height jitter, structure damage, landslides |
-| Volcano | globe + region | lava (slow water variant), ash, fire |
-| Flood / super-storm | region | water flow, wind |
-| Ice age / solar flare | globe | temp anomaly, population decay |
+
+| Disaster              | Scale                                  | Uses                                        |
+| --------------------- | -------------------------------------- | ------------------------------------------- |
+| Tsunami               | region (spawned by ocean impact/quake) | water flow                                  |
+| Earthquake            | region + globe                         | height jitter, structure damage, landslides |
+| Volcano               | globe + region                         | lava (slow water variant), ash, fire        |
+| Flood / super-storm   | region                                 | water flow, wind                            |
+| Ice age / solar flare | globe                                  | temp anomaly, population decay              |
 
 ### 5.5 Chain-reaction matrix (v1)
-| Cause → Effect | Fire | Wind | Structures | Global ash/temp |
-|---|---|---|---|---|
-| Asteroid | ignites in thermal radius | shock gust | blast damage | ash injection |
-| Tornado | — | vortex perturbs fires | path damage | — |
-| Wildfire | spreads | updraft (local) | heat damage | small ash (if large) |
+
+| Cause → Effect | Fire                      | Wind                  | Structures   | Global ash/temp      |
+| -------------- | ------------------------- | --------------------- | ------------ | -------------------- |
+| Asteroid       | ignites in thermal radius | shock gust            | blast damage | ash injection        |
+| Tornado        | —                         | vortex perturbs fires | path damage  | —                    |
+| Wildfire       | spreads                   | updraft (local)       | heat damage  | small ash (if large) |
 
 ---
 
 ## 6. Rendering
 
 ### 6.1 Globe
+
 - **Mesh:** a subdivided cube-sphere (better triangle distribution than UV sphere), ~128 segments per face.
 - **Shader:** a vertex shader displaces by the `elevation` texture (exaggerated ×20). A fragment shader colors from the biome palette plus overlays (fire glow, damage darkening, crater decals), with a lighting terminator.
 - **Atmosphere:** a back-face fresnel shell with an additive glow. It tints grey/brown with mean ash.
@@ -228,6 +252,7 @@ These run independently of disasters and are where chain reactions come from:
 - **Ash clouds:** a second slightly larger sphere with an alpha mask from the `ash` layer that scrolls slowly.
 
 ### 6.2 Region
+
 - **Terrain:** a 256 × 256 vertex `PlaneGeometry` with heights written to the position buffer (CPU; recomputed only on crater/terrain change). Splat shading by slope/height/biome plus a burn/scorch overlay texture.
 - **Water:** a separate plane with a per-vertex depth texture (alpha/hidden where depth ≈ 0).
 - **Structures & trees:** `InstancedMesh` per type (low-poly boxes/gable roofs, cone trees). Destroyed instances are swapped to a rubble mesh or scaled to 0.
@@ -236,15 +261,18 @@ These run independently of disasters and are where chain reactions come from:
 - **Style:** flat-shaded low-poly, a saturated palette, soft hemisphere + directional light, fog for depth.
 
 ### 6.3 Globe ↔ Region transition
+
 1. On double-click, tween the camera toward the surface point (~0.6 s, ease-in).
 2. Fade to white (impact-flash feel) while the region generates (target < 300 ms; show a spinner if longer).
 3. Fade into the region with the camera starting high and settling down.
-Reverse on exit. During the transition, the outgoing sim continues headless if events are still active.
+   Reverse on exit. During the transition, the outgoing sim continues headless if events are still active.
 
 ---
 
 ## 7. UI / HUD
+
 Plain DOM + CSS overlay (no framework needed for v1; Preact if it grows).
+
 - **Disaster palette (left):** icons. Selecting one shows an auto-generated param panel from the `ParamSchema`.
 - **Targeting reticle:** blast/thermal radii previewed on hover.
 - **Stats panel (top-right):** population, casualties, structures destroyed, damage $, global temp anomaly, active events.
@@ -255,6 +283,7 @@ Plain DOM + CSS overlay (no framework needed for v1; Preact if it grows).
 ---
 
 ## 8. Project Structure
+
 ```
 /
 ├─ index.html
@@ -304,12 +333,14 @@ Plain DOM + CSS overlay (no framework needed for v1; Preact if it grows).
 Each milestone ends in something **playable and demoable**. Estimates assume one developer working part-time with AI assistance.
 
 ### M0 — Scaffold (½ day)
-- [ ] Vite + TS + three.js project; ESLint/Prettier; Vitest.
-- [ ] `core/rng.ts`, `core/noise.ts` (simplex 3D), `core/geo.ts`, with unit tests.
-- [ ] Render loop with fixed-step sim accumulator and stats.js FPS overlay.
+
+- [x] Vite + TS + three.js project; ESLint/Prettier; Vitest.
+- [x] `core/rng.ts`, `core/noise.ts` (simplex 3D), `core/geo.ts`, with unit tests.
+- [x] Render loop with fixed-step sim accumulator (`core/clock.ts`) and stats.js FPS overlay.
 - **Done when:** `npm run dev` shows a spinning lit cube at 60 fps, and `npm test` passes.
 
 ### M1 — Procedural globe (2–3 days)
+
 - [ ] `gen/globe.ts`: elevation, temperature, moisture, biome, population and cities into a `GlobalWorld`.
 - [ ] `GlobeView`: cube-sphere, displacement + biome shader, atmosphere glow, night-side city lights.
 - [ ] `GlobeControls`: drag-rotate, wheel zoom, inertia.
@@ -318,6 +349,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** a believable planet with continents, oceans, ice caps and visible city lights is generated in < 1 s, and hovering reports the correct cell data.
 
 ### M2 — Asteroid on the globe (2 days)
+
 - [ ] `DisasterDef` interface, registry, `ParamSchema` → auto UI panel.
 - [ ] `disasters/asteroid.ts` (globe scale): energy, radii, airburst rule, population/damage application, ash injection.
 - [ ] `systems/atmosphere.ts`: ash advection + decay, global temp anomaly.
@@ -328,6 +360,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** you can pick size and speed, smash the planet, see casualties tick up, watch ash spread and city lights go dark. **First "wow" milestone.**
 
 ### M3 — Regional view + transition (3 days)
+
 - [ ] `gen/region.ts`: footprint sampling, detail noise, rivers, fuel/moisture, towns, roads.
 - [ ] `RegionView`: terrain mesh + splat shader, water plane, instanced houses/towers/trees.
 - [ ] `RegionControls`: pan/orbit/zoom with ground clamping.
@@ -336,6 +369,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** double-clicking any land point dives into a distinct-looking diorama matching that biome (desert vs forest vs tundra), and Esc returns to the globe in the same orientation.
 
 ### M4 — Regional asteroid + fire system (3 days)
+
 - [ ] `systems/damage.ts`: structure HP, collapse → casualties, debris events.
 - [ ] `systems/fire.ts`: CA with fuel/moisture/wind/slope; burn overlay texture; burnt trees.
 - [ ] `systems/wind.ts`: base wind field + settings UI.
@@ -346,6 +380,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** an impact in a forested region carves a crater, levels a town and starts a wildfire that spreads with the wind. **First chain reaction.**
 
 ### M5 — Tornado + wildfire disasters, sync (3 days)
+
 - [ ] `disasters/tornado.ts`: vortex agent, lifecycle, EF damage, wind perturbation, fuel stripping.
 - [ ] Tornado view: layered noise funnel, debris ring, dust skirt, damage path visible in terrain.
 - [ ] `disasters/wildfire.ts`: ignite command + param panel (brush size).
@@ -354,6 +389,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** all three disasters work, a tornado can push a fire front, and leaving a region shows the damage on the globe and in global stats.
 
 ### M6 — Performance & polish (2–3 days)
+
 - [ ] Profile; move `sim/` into a Web Worker if the region tick exceeds ~4 ms (transferable snapshots of dirty layers).
 - [ ] Dirty-rect texture uploads; LOD for instanced buildings; particle budget enforcement.
 - [ ] Audio: impact boom (delayed by distance), wind roar, fire crackle, UI clicks. Use WebAudio with CC0 samples in `public/audio/`, with sources listed in `CREDITS.md`.
@@ -362,6 +398,7 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 - **Done when:** steady 60 fps on a mid-range laptop with a large fire + tornado + 20k particles. A first-time user destroys something within 10 s without instructions.
 
 ### M7+ — Expansion backlog (pick by fun)
+
 1. Tsunami (ocean impact → water flow run-up) ← highest chain-reaction value
 2. Earthquake + landslides
 3. Volcano (lava + ash)
@@ -375,19 +412,21 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 ---
 
 ## 10. Performance Budgets
-| Item | Budget |
-|---|---|
-| Frame time | 16.6 ms (60 fps) on integrated GPU |
-| Region sim tick | ≤ 4 ms main thread (else → worker) |
-| Globe gen | < 1 s |
-| Region gen | < 300 ms |
-| Draw calls (region) | < 150 |
-| Live particles | ≤ 20k |
-| Memory | < 400 MB |
+
+| Item                | Budget                             |
+| ------------------- | ---------------------------------- |
+| Frame time          | 16.6 ms (60 fps) on integrated GPU |
+| Region sim tick     | ≤ 4 ms main thread (else → worker) |
+| Globe gen           | < 1 s                              |
+| Region gen          | < 300 ms                           |
+| Draw calls (region) | < 150                              |
+| Live particles      | ≤ 20k                              |
+| Memory              | < 400 MB                           |
 
 ---
 
 ## 11. Testing Strategy
+
 - **Unit (Vitest):** noise determinism, geo math, disaster scaling laws, fire CA properties, sync conservation, region regeneration determinism.
 - **Golden tests:** generate a world with a fixed seed and assert summary statistics (ocean %, total population ± tolerance) so generation changes are deliberate.
 - **Sim harness:** a headless script that runs N ticks of a scenario command log and prints stats. It's used for tuning and perf.
@@ -396,21 +435,23 @@ Each milestone ends in something **playable and demoable**. Estimates assume one
 ---
 
 ## 12. Risks & Mitigations
-| Risk | Mitigation |
-|---|---|
-| Sim + render on main thread stutters | Sim is isolated from three.js from day 1, so moving to a worker is mechanical |
-| Fire CA looks blocky/grid-like | Randomized spread probabilities, sub-cell noise in the burn shader, smoke hides edges |
-| Region feels disconnected from globe | Strict sampling from global layers, visible scars both ways, a shared event log |
-| Scope creep from "just one more disaster" | Disaster interface + backlog; nothing post-M5 until M6 polish is done |
-| Tonal discomfort (casualties) | Stylized visuals, abstract counts, no visible people, playful copy |
-| Pole distortion on equirect grid | Acceptable for v1; regions near poles clamp; can migrate to cube-sphere grid later |
+
+| Risk                                      | Mitigation                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| Sim + render on main thread stutters      | Sim is isolated from three.js from day 1, so moving to a worker is mechanical         |
+| Fire CA looks blocky/grid-like            | Randomized spread probabilities, sub-cell noise in the burn shader, smoke hides edges |
+| Region feels disconnected from globe      | Strict sampling from global layers, visible scars both ways, a shared event log       |
+| Scope creep from "just one more disaster" | Disaster interface + backlog; nothing post-M5 until M6 polish is done                 |
+| Tonal discomfort (casualties)             | Stylized visuals, abstract counts, no visible people, playful copy                    |
+| Pole distortion on equirect grid          | Acceptable for v1; regions near poles clamp; can migrate to cube-sphere grid later    |
 
 ---
 
 ## 13. Decisions Log
-| Question | Decision |
-|---|---|
-| Real Earth vs procedural | **Procedural, seeded planet.** Real-Earth pack stays in the backlog only. |
-| Score / goals | **Informational stats only.** No score; scenarios remain post-v1 backlog. |
-| Art direction | **Low-poly toy** (*Townscaper* / *Islanders* feel): flat shading, saturated palette. |
-| Audio | **Free CC0 sample packs** (e.g. Kenney, freesound CC0, OpenGameArt CC0). Track sources and licenses in `public/audio/CREDITS.md`. |
+
+| Question                 | Decision                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Real Earth vs procedural | **Procedural, seeded planet.** Real-Earth pack stays in the backlog only.                                                         |
+| Score / goals            | **Informational stats only.** No score; scenarios remain post-v1 backlog.                                                         |
+| Art direction            | **Low-poly toy** (_Townscaper_ / _Islanders_ feel): flat shading, saturated palette.                                              |
+| Audio                    | **Free CC0 sample packs** (e.g. Kenney, freesound CC0, OpenGameArt CC0). Track sources and licenses in `public/audio/CREDITS.md`. |
