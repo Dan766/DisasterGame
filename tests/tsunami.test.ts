@@ -5,7 +5,10 @@ import {
   floodImpact,
   planTsunami,
   sourceAmplitudeM,
+  TSUNAMI_KM_PER_DAY,
   tsunamiReachKm,
+  waveFrontAlpha,
+  waveFrontKm,
   waveHeightM,
 } from '../src/sim/systems/tsunami';
 import { cellCenter, createGlobalWorld, livingPopulation } from '../src/sim/world';
@@ -104,5 +107,34 @@ describe('GlobeSim tsunami', () => {
     });
     for (let d = 0; d < 10; d++) sim.step(1);
     expect(sim.drainEvents().some((e) => e.type === 'tsunami')).toBe(false);
+  });
+});
+
+describe('tsunami wave front', () => {
+  it('travels at wave speed and fades out at its reach', () => {
+    expect(waveFrontKm(2)).toBeCloseTo(2 * TSUNAMI_KM_PER_DAY);
+    expect(waveFrontKm(-1)).toBe(0);
+    expect(waveFrontAlpha(0, 5000)).toBe(1);
+    expect(waveFrontAlpha(4900, 5000)).toBeLessThan(0.1);
+    expect(waveFrontAlpha(5000, 5000)).toBe(0);
+  });
+
+  it('GlobeSim reports a front while the wave is under way, then none', () => {
+    const world = generateGlobe('wave-front', small);
+    const sim = new GlobeSim(world);
+    expect(sim.waveFronts()).toEqual([]);
+    sim.submit({
+      type: 'spawn',
+      disaster: 'asteroid',
+      params: { diameterM: 3000, velocityKms: 20, angleDeg: 90, composition: 'iron' },
+      target: oceanSpot(world),
+    });
+    sim.step(0.5);
+    const [front] = sim.waveFronts();
+    expect(front).toBeDefined();
+    expect(front!.radiusKm).toBeCloseTo(0.5 * TSUNAMI_KM_PER_DAY);
+    expect(front!.alpha).toBeGreaterThan(0);
+    for (let d = 0; d < 60; d++) sim.step(1);
+    expect(sim.waveFronts()).toEqual([]);
   });
 });

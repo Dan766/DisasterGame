@@ -426,7 +426,7 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 ### M7+ — Expansion backlog (pick by fun)
 
-1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); remaining: region-scale water flow/run-up view and a tsunami wave overlay on the globe.
+1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); globe wave-front overlay done (`GlobeSim.waveFronts()`, cool-tinted expanding ring in the globe shader); remaining: region-scale water flow/run-up view.
 2. Earthquake + landslides
 3. Volcano (lava + ash)
 4. Sci-fi pack (playful, toy-tone disasters that reuse existing systems):

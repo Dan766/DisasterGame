@@ -8,7 +8,15 @@ import { createRng, type Rng } from '../core/rng';
 import { describeLocation } from './describe';
 import { getDisaster } from './disasters/registry';
 import type { GlobeEffects, ImpactOutcome, Params } from './disasters/types';
-import { planTsunami, floodImpact, type Landfall } from './systems/tsunami';
+import {
+  planTsunami,
+  floodImpact,
+  sourceAmplitudeM,
+  tsunamiReachKm,
+  waveFrontKm,
+  waveFrontAlpha,
+  type Landfall,
+} from './systems/tsunami';
 import { VALUE_PER_PERSON_USD } from './systems/damage';
 import { injectAsh, stepAtmosphere } from './systems/atmosphere';
 import { livingPopulation, type GlobalWorld } from './world';
@@ -43,7 +51,18 @@ export interface TsunamiEvent {
 }
 export type SimEvent = ImpactEvent | TsunamiEvent;
 
+/** A tsunami wave front still travelling across open water, for the globe overlay. */
+export interface WaveFront {
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  alpha: number;
+}
+
 interface ActiveTsunami {
+  lat: number;
+  lon: number;
+  reachKm: number;
   startDay: number;
   landfalls: Landfall[];
   next: number;
@@ -96,6 +115,9 @@ export class GlobeSim {
         const landfalls = planTsunami(world, { lat, lon }, craterRadiusKm);
         if (landfalls.length === 0) return;
         this.tsunamis.push({
+          lat,
+          lon,
+          reachKm: tsunamiReachKm(sourceAmplitudeM(craterRadiusKm), craterRadiusKm),
           startDay: world.stats.simDays,
           landfalls,
           next: 0,
@@ -155,6 +177,17 @@ export class GlobeSim {
     stepAtmosphere(world, dtDays);
     if (world.ash.some((v) => v > 1e-6)) this.dirty.ash = true;
     this.stepFamine(dtDays);
+  }
+
+  /** Wave fronts of tsunamis still under way (empty once they have run their course). */
+  waveFronts(): WaveFront[] {
+    const fronts: WaveFront[] = [];
+    for (const ts of this.tsunamis) {
+      const radiusKm = waveFrontKm(this.world.stats.simDays - ts.startDay);
+      const alpha = waveFrontAlpha(radiusKm, ts.reachKm);
+      if (alpha > 0) fronts.push({ lat: ts.lat, lon: ts.lon, radiusKm, alpha });
+    }
+    return fronts;
   }
 
   /** Floods every coastal cell the waves have reached by now; reports each tsunami when it has run its course. */

@@ -33,13 +33,15 @@ const ATMOSPHERE_RADIUS = 1.08;
 const ATMOSPHERE_COLOR = new Color(0x6fb2ff);
 const ASHEN_SKY = new Color(0x8a7a6a);
 const MAX_CRATERS = 32; // keep in sync with globe.frag.glsl
-const MAX_SHOCKS = 4;
+const MAX_SHOCKS = 8; // keep in sync with globe.frag.glsl
 
 export interface ShockRing {
   /** Unit direction of the impact in globe space. */
   dir: Vector3;
   radiusKm: number;
   alpha: number;
+  /** Cool water-wave styling instead of the fiery blast ring. */
+  wave?: boolean;
 }
 
 export interface TargetRadiiKm {
@@ -79,6 +81,7 @@ export class GlobeView {
         uCraters: { value: Array.from({ length: MAX_CRATERS }, () => new Vector4()) },
         uCraterCount: { value: 0 },
         uShocks: { value: Array.from({ length: MAX_SHOCKS }, () => new Vector4()) },
+        uShockWave: { value: new Array<number>(MAX_SHOCKS).fill(0) },
         uShockAlpha: { value: new Array<number>(MAX_SHOCKS).fill(0) },
         uTargetOn: { value: 0 },
         uTargetDir: { value: new Vector3(0, 0, 1) },
@@ -153,9 +156,11 @@ export class GlobeView {
   setShocks(shocks: readonly ShockRing[]): void {
     const slots = this.uniforms.uShocks!.value as Vector4[];
     const alpha = this.uniforms.uShockAlpha!.value as number[];
+    const wave = this.uniforms.uShockWave!.value as number[];
     for (let i = 0; i < MAX_SHOCKS; i++) {
       const s = shocks[i];
       alpha[i] = s ? s.alpha : 0;
+      wave[i] = s?.wave ? 1 : 0;
       if (s) slots[i]!.set(s.dir.x, s.dir.y, s.dir.z, s.radiusKm / PLANET_RADIUS_KM);
     }
   }

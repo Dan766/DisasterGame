@@ -21,9 +21,10 @@ uniform float uLightsScale; // share of the population still alive
 uniform vec4 uCraters[MAX_CRATERS]; // xyz = center dir, w = angular radius
 uniform int uCraterCount;
 
-#define MAX_SHOCKS 4
+#define MAX_SHOCKS 8
 uniform vec4 uShocks[MAX_SHOCKS]; // xyz = center dir, w = angular radius
 uniform float uShockAlpha[MAX_SHOCKS];
+uniform float uShockWave[MAX_SHOCKS]; // 1 = tsunami front (cool tint)
 
 uniform float uTargetOn;
 uniform vec3 uTargetDir;
@@ -179,7 +180,11 @@ void main() {
     float w = max(s.w * 0.05, pxAng * 1.5);
     float front = exp(-pow((d - s.w) / w, 2.0));
     float behind = (1.0 - smoothstep(0.0, s.w, d)) * 0.2;
-    color += (vec3(1.0, 0.85, 0.6) * front * 1.6 + vec3(1.0, 0.45, 0.15) * behind) * a;
+    if (uShockWave[i] > 0.5) {
+      color += (vec3(0.55, 0.9, 1.0) * front * 1.3 + vec3(0.15, 0.45, 0.8) * behind * 0.5) * a;
+    } else {
+      color += (vec3(1.0, 0.85, 0.6) * front * 1.6 + vec3(1.0, 0.45, 0.15) * behind) * a;
+    }
   }
 
   // Targeting overlay: fire radius, blast radius, crater footprint.

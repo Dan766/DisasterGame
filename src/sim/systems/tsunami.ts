@@ -47,6 +47,17 @@ export function tsunamiReachKm(sourceAmplitude: number, craterRadiusKm: number):
   return (sourceAmplitude * r * RUNUP_FACTOR) / MIN_RUNUP_M;
 }
 
+/** How far the wave front has travelled `elapsedDays` after the strike. */
+export function waveFrontKm(elapsedDays: number): number {
+  return Math.max(0, elapsedDays) * TSUNAMI_KM_PER_DAY;
+}
+
+/** Visible strength of the front: full while young, fading out as it nears its reach. */
+export function waveFrontAlpha(radiusKm: number, reachKm: number): number {
+  if (reachKm <= 0 || radiusKm >= reachKm) return 0;
+  return Math.min(1, (1 - radiusKm / reachKm) * 2.5);
+}
+
 /** Fractions of people killed / infrastructure destroyed for a flooded cell. */
 export function floodImpact(runupM: number, elevationM: number) {
   const inundation = Math.max(0, Math.min(1, 1 - elevationM / runupM));

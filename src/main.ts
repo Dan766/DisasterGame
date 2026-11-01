@@ -17,6 +17,7 @@ import { PostFX } from './render/fx/PostFX';
 import { RegionView } from './render/region/RegionView';
 import { createStarfield } from './render/Starfield';
 import { Transition, easeInCubic, easeInOutCubic, tween } from './render/Transition';
+import { latLonToVec3 } from './core/geo';
 import { GlobeSim } from './sim/GlobeSim';
 import { asteroidEffects, parseAsteroidParams } from './sim/disasters/asteroid';
 import { tornadoSpecFromParams } from './sim/disasters/tornado';
@@ -636,7 +637,18 @@ renderer.setAnimationLoop((now) => {
   Object.assign(sim.dirty, { terrain: false, effects: false, ash: false });
 
   fx.update(dt);
-  globe.setShocks(fx.shockRings());
+  globe.setShocks([
+    ...fx.shockRings(),
+    ...sim.waveFronts().map((f) => {
+      const v = latLonToVec3(f.lat, f.lon);
+      return {
+        dir: new THREE.Vector3(v.x, v.y, v.z),
+        radiusKm: f.radiusKm,
+        alpha: f.alpha,
+        wave: true,
+      };
+    }),
+  ]);
   globe.update(now / 1000);
 
   if (mode === 'globe') {
