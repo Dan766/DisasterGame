@@ -38,6 +38,10 @@ import {
 import { Biome } from '../../sim/world';
 import { StructureLodSet } from './structureLod';
 import { RowSpans } from './rowSpans';
+import { foamStrength, waterSurfaceM } from './waterSurface';
+
+/** Open-water colour (linear 0..1) held in the water vertex colours; foam lerps toward white. */
+const WATER_RGB: readonly [number, number, number] = [0x2f / 255, 0x7f / 255, 0xb8 / 255];
 
 /** World units per cell (100 m). Heights are meters / 100 × VERTICAL_EXAGGERATION. */
 const VERTICAL_EXAGGERATION = 1.6;
@@ -163,6 +167,8 @@ export class RegionView {
   private trees: { mesh: InstancedMesh; cells: number[]; gone: Uint8Array } | null = null;
   private terrainMesh: Mesh | null = null;
   private waterMesh: Mesh | null = null;
+  /** Water depths last drawn, to find the moving flood front and skip unchanged frames. */
+  private waterDepth: Float32Array | null = null;
   private fireMesh: Mesh | null = null;
   private structureSets: StructureLodSet[] = [];
   private readonly charred = new Color(0x2a2220);
@@ -409,8 +415,49 @@ export class RegionView {
     this.trees = null;
     this.terrainMesh = null;
     this.waterMesh = null;
+    this.waterDepth = null;
     this.fireMesh = null;
     this.structureSets = [];
+  }
+
+  /**
+   * Updates the water surface from the mirrored `water` layer (a tsunami flooding in):
+   * vertex heights follow the depth and foam whitens the moving front and shallow fringe.
+   * Does nothing when no depth changed since the last call.
+   */
+  updateWater(region: RegionWorld): void {
+    const mesh = this.waterMesh;
+    const prev = this.waterDepth;
+    if (!mesh || !prev || this.region !== region) return;
+    const n = REGION_SIZE;
+    const water = region.water;
+    let changed = false;
+    for (let i = 0; i < n * n; i++) {
+      if (water[i] !== prev[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
+    const wp = mesh.geometry.getAttribute('position') as BufferAttribute;
+    const colors = mesh.geometry.getAttribute('color') as BufferAttribute;
+    for (let i = 0; i < n * n; i++) {
+      const depth = water[i]!;
+      const surface = waterSurfaceM(region.height[i]!, depth);
+      wp.setY(i, (Math.max(surface, -80) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION);
+      // Foam blends the water colour toward white (the material colour is white).
+      const foam = foamStrength(depth, depth - prev[i]!);
+      colors.setXYZ(
+        i,
+        WATER_RGB[0] + (1 - WATER_RGB[0]) * foam,
+        WATER_RGB[1] + (1 - WATER_RGB[1]) * foam,
+        WATER_RGB[2] + (1 - WATER_RGB[2]) * foam,
+      );
+      prev[i] = depth;
+    }
+    wp.needsUpdate = true;
+    colors.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
   }
 
   /**
@@ -460,9 +507,7 @@ export class RegionView {
     if (this.waterMesh) {
       const wp = this.waterMesh.geometry.getAttribute('position') as BufferAttribute;
       for (let i = 0; i < n * n; i++) {
-        const depth = region.water[i]!;
-        const surface =
-          depth > 0.05 ? Math.max(region.height[i]!, 0) + depth : region.height[i]! - 6;
+        const surface = waterSurfaceM(region.height[i]!, region.water[i]!);
         wp.setY(i, (Math.max(surface, -80) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION);
       }
       wp.needsUpdate = true;
@@ -586,20 +631,24 @@ export class RegionView {
     geometry.rotateX(-Math.PI / 2);
     const positions = geometry.getAttribute('position') as BufferAttribute;
     for (let i = 0; i < n * n; i++) {
-      const depth = region.water[i]!;
       // Dry cells sink below the terrain so only wet cells show.
-      const surface = depth > 0.05 ? Math.max(region.height[i]!, 0) + depth : region.height[i]! - 6;
+      const surface = waterSurfaceM(region.height[i]!, region.water[i]!);
       positions.setY(i, (Math.max(surface, -80) / METERS_PER_UNIT) * VERTICAL_EXAGGERATION);
     }
+    const waterColors = new Float32Array(n * n * 3);
+    for (let i = 0; i < n * n; i++) waterColors.set(WATER_RGB, i * 3);
+    geometry.setAttribute('color', new BufferAttribute(waterColors, 3));
+    this.waterDepth = region.water.slice();
     geometry.computeVertexNormals();
     const material = this.track(
       new MeshPhongMaterial({
-        color: 0x2f7fb8,
+        color: 0xffffff,
         specular: 0xaed6f0,
         shininess: 60,
         transparent: true,
         opacity: 0.82,
         flatShading: true,
+        vertexColors: true,
         side: DoubleSide,
       }),
     );

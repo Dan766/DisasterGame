@@ -630,7 +630,9 @@ renderer.setAnimationLoop((now) => {
       regionSyncer.sync(sim);
       nextSyncAt = regionSim.elapsed + SYNC_INTERVAL_S;
     }
-    if (regionSim.takeFresh() || regionSim.lastFire.burning > 0)
+    const fresh = regionSim.takeFresh();
+    if (fresh) regionView.updateWater(regionSim.region);
+    if (fresh || regionSim.lastFire.burning > 0)
       regionView.updateFire(regionSim.region, now / 1000);
   }
   globe.syncLayers(world, sim.dirty);
