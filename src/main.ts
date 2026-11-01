@@ -5,6 +5,7 @@ import { boomDelaySeconds, crackleLevel, windRoarLevel } from './audio/mix';
 import { FixedStepClock } from './core/clock';
 import { GlobeControls } from './input/GlobeControls';
 import { GlobePicker, type GlobePick } from './input/Picking';
+import { KeyMove } from './input/KeyMove';
 import { RegionControls } from './input/RegionControls';
 import { DISPLACE_SCALE, GlobeView } from './render/globe/GlobeView';
 import { ImpactFx } from './render/globe/ImpactFx';
@@ -178,6 +179,7 @@ hud.append(
 // --- Input -----------------------------------------------------------------
 
 const controls = new GlobeControls(camera, canvas);
+const keyMove = new KeyMove();
 const picker = new GlobePicker(
   globe.root,
   (lat, lon) => Math.max(world.elevation[cellAt(world, lat, lon)]!, 0) * DISPLACE_SCALE,
@@ -619,12 +621,14 @@ renderer.setAnimationLoop((now) => {
   globe.update(now / 1000);
 
   if (mode === 'globe') {
+    controls.move(keyMove.axes, dt);
     if (controls.orbit.enabled) controls.update(dt);
     // Picking reads camera.matrixWorld, which render() would otherwise refresh only afterwards.
     camera.updateMatrixWorld();
     updateHover();
     fx.applyShake(camera);
   } else {
+    regionControls.move(keyMove.axes, dt);
     regionControls.update(dt);
   }
   if (mode === 'region') {

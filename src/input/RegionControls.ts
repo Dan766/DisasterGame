@@ -1,9 +1,12 @@
 import type { PerspectiveCamera } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp } from '../core/math';
+import type { MoveAxes } from './KeyMove';
 
 /** Keeps the camera above the terrain by at least this many world units. */
 const GROUND_CLEARANCE = 2.5;
+/** Keyboard pan speed as a fraction of the camera distance per second. */
+const KEY_PAN_RATE = 0.7;
 
 /**
  * Orbit / pan / zoom camera for the regional diorama. Right-drag (or two
@@ -46,6 +49,23 @@ export class RegionControls {
       Math.cos(azimuth) * Math.sin(polar) * distance,
     );
     this.orbit.update();
+  }
+
+  /** Slides camera and focus across the ground, relative to where the camera faces. */
+  move(axes: MoveAxes, dtSeconds: number): void {
+    if (!this.orbit.enabled || (axes.x === 0 && axes.y === 0)) return;
+    const target = this.orbit.target;
+    const fx = target.x - this.camera.position.x;
+    const fz = target.z - this.camera.position.z;
+    const len = Math.hypot(fx, fz) || 1;
+    const step = this.camera.position.distanceTo(target) * KEY_PAN_RATE * dtSeconds;
+    // Forward is the camera's ground heading; right is that turned 90° clockwise.
+    const dx = ((fx * axes.y - fz * axes.x) / len) * step;
+    const dz = ((fz * axes.y + fx * axes.x) / len) * step;
+    target.x += dx;
+    target.z += dz;
+    this.camera.position.x += dx;
+    this.camera.position.z += dz;
   }
 
   update(dtSeconds: number): void {
