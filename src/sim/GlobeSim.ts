@@ -5,8 +5,11 @@
  */
 import type { LatLon } from '../core/geo';
 import { createRng, type Rng } from '../core/rng';
+import { describeLocation } from './describe';
 import { getDisaster } from './disasters/registry';
 import type { GlobeEffects, ImpactOutcome, Params } from './disasters/types';
+import { planTsunami, floodImpact, type Landfall } from './systems/tsunami';
+import { VALUE_PER_PERSON_USD } from './systems/damage';
 import { injectAsh, stepAtmosphere } from './systems/atmosphere';
 import { livingPopulation, type GlobalWorld } from './world';
 
@@ -26,7 +29,29 @@ export interface ImpactEvent extends ImpactOutcome {
   lat: number;
   lon: number;
 }
-export type SimEvent = ImpactEvent;
+/** Summary of a tsunami once its wave has finished reaching coastlines. */
+export interface TsunamiEvent {
+  type: 'tsunami';
+  id: number;
+  day: number;
+  title: string;
+  deaths: number;
+  damageUSD: number;
+  /** Coastal cells flooded. */
+  coastCells: number;
+  maxRunupM: number;
+}
+export type SimEvent = ImpactEvent | TsunamiEvent;
+
+interface ActiveTsunami {
+  startDay: number;
+  landfalls: Landfall[];
+  next: number;
+  title: string;
+  deaths: number;
+  damageUSD: number;
+  maxRunupM: number;
+}
 
 /** e-folding time for wildfires on the global grid. */
 const FIRE_LIFETIME_DAYS = 8;
@@ -45,6 +70,7 @@ export class GlobeSim {
 
   private readonly events: SimEvent[] = [];
   private readonly burning = new Set<number>();
+  private readonly tsunamis: ActiveTsunami[] = [];
   private readonly rng: Rng;
   private nextEventId = 1;
   /** Famine survival factor not yet applied to the per-cell population layer. */
@@ -66,11 +92,24 @@ export class GlobeSim {
       markTerrainChanged: () => {
         this.dirty.terrain = true;
       },
+      launchTsunami: (lat, lon, craterRadiusKm) => {
+        const landfalls = planTsunami(world, { lat, lon }, craterRadiusKm);
+        if (landfalls.length === 0) return;
+        this.tsunamis.push({
+          startDay: world.stats.simDays,
+          landfalls,
+          next: 0,
+          title: `Impact tsunami hit coasts (strike at ${describeLocation(world, { lat, lon })})`,
+          deaths: 0,
+          damageUSD: 0,
+          maxRunupM: 0,
+        });
+      },
     };
   }
 
   /** Applies a command immediately (even while paused) and returns the resulting event. */
-  submit(command: GlobeCommand): SimEvent | null {
+  submit(command: GlobeCommand): ImpactEvent | null {
     const def = getDisaster(command.disaster);
     if (!def?.spawnGlobe) return null;
     const day = this.world.stats.simDays;
@@ -84,7 +123,7 @@ export class GlobeSim {
       effects: this.effects,
     });
     this.dirty.effects = true;
-    const event: SimEvent = {
+    const event: ImpactEvent = {
       ...outcome,
       type: 'impact',
       id: this.nextEventId++,
@@ -112,9 +151,49 @@ export class GlobeSim {
     const { world } = this;
     world.stats.simDays += dtDays;
     this.stepFires(dtDays);
+    this.stepTsunamis();
     stepAtmosphere(world, dtDays);
     if (world.ash.some((v) => v > 1e-6)) this.dirty.ash = true;
     this.stepFamine(dtDays);
+  }
+
+  /** Floods every coastal cell the waves have reached by now; reports each tsunami when it has run its course. */
+  private stepTsunamis(): void {
+    if (this.tsunamis.length === 0) return;
+    const { world } = this;
+    const { population, damage, elevation } = world;
+    for (let t = this.tsunamis.length - 1; t >= 0; t--) {
+      const ts = this.tsunamis[t]!;
+      const elapsed = world.stats.simDays - ts.startDay;
+      while (ts.next < ts.landfalls.length && ts.landfalls[ts.next]!.arrivalDay <= elapsed) {
+        const { cell, runupM } = ts.landfalls[ts.next++]!;
+        const flood = floodImpact(runupM, elevation[cell]!);
+        const people = population[cell]!;
+        const deaths = people * flood.fatality;
+        population[cell] = people - deaths;
+        const before = damage[cell]!;
+        const after = 1 - (1 - before) * (1 - flood.destruction);
+        damage[cell] = after;
+        ts.deaths += deaths;
+        ts.damageUSD += people * VALUE_PER_PERSON_USD * (after - before);
+        ts.maxRunupM = Math.max(ts.maxRunupM, runupM);
+        this.dirty.effects = true;
+      }
+      if (ts.next < ts.landfalls.length) continue;
+      world.stats.casualties += ts.deaths;
+      world.stats.damageUSD += ts.damageUSD;
+      this.events.push({
+        type: 'tsunami',
+        id: this.nextEventId++,
+        day: world.stats.simDays,
+        title: ts.title,
+        deaths: ts.deaths,
+        damageUSD: ts.damageUSD,
+        coastCells: ts.landfalls.length,
+        maxRunupM: ts.maxRunupM,
+      });
+      this.tsunamis.splice(t, 1);
+    }
   }
 
   private stepFires(dtDays: number): void {

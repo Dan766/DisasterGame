@@ -16,9 +16,12 @@ export class EventLog {
   add(event: SimEvent): void {
     const entry = document.createElement('div');
     entry.className = 'event';
-    const extra = event.ocean ? ' · ocean strike' : event.airburst ? ' · airburst' : '';
+    const detail =
+      event.type === 'tsunami'
+        ? `tsunami · ${Math.round(event.maxRunupM)} m run-up · ${event.coastCells} coastal cells`
+        : `${formatMegatons(event.megatons)}${event.ocean ? ' · ocean strike' : event.airburst ? ' · airburst' : ''}`;
     entry.innerHTML = `
-      <div class="event-meta">${formatSimDate(event.day)} · ${formatMegatons(event.megatons)}${extra}</div>
+      <div class="event-meta">${formatSimDate(event.day)} · ${detail}</div>
       <div class="event-title"></div>
       <div class="event-toll"><b>${formatPopulation(event.deaths)}</b> dead · ${formatUSD(event.damageUSD)} damage</div>`;
     // Titles include generated place names; set as text, not HTML.

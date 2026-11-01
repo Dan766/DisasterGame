@@ -47,6 +47,8 @@ export interface GlobeEffects {
   injectAsh(lat: number, lon: number, sigmaKm: number, mass: number): void;
   ignite(cell: number, intensity: number): void;
   markTerrainChanged(): void;
+  /** Sends a tsunami across the ocean from an ocean strike. */
+  launchTsunami(lat: number, lon: number, craterRadiusKm: number): void;
 }
 
 export interface GlobeSpawnContext {

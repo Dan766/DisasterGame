@@ -618,6 +618,8 @@ renderer.setAnimationLoop((now) => {
   if (mode === 'globe') {
     const steps = clock.advance(frameMs);
     for (let i = 0; i < steps; i++) sim.step(1);
+    // Impacts are logged when launched; later events (tsunami tolls) arrive as days pass.
+    for (const event of sim.drainEvents()) if (event.type === 'tsunami') eventLog.add(event);
   } else if (regionSim) {
     regionClock.paused = clock.paused;
     regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;

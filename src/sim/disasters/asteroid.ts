@@ -212,6 +212,7 @@ export const asteroid: DisasterDef = {
         effects.markTerrainChanged();
       world.craters.push({ lat: target.lat, lon: target.lon, radiusKm: fx.craterRadiusKm, ocean });
     }
+    if (ocean && !fx.airburst) effects.launchTsunami(target.lat, target.lon, fx.craterRadiusKm);
     // Ocean strikes loft more vapor than dust.
     effects.injectAsh(
       target.lat,
