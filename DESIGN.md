@@ -413,7 +413,8 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 ### M6 — Performance & polish (2–3 days)
 
-- [ ] Profile; move `sim/` into a Web Worker if the region tick exceeds ~4 ms (transferable snapshots of dirty layers).
+- [x] Profile the region tick (`npm run profile`, `scripts/profile-region.ts`: 256² region, two 12-cell fires + EF4 tornado, ~28k burning cells peak). Result (Node, single thread): mean ~4.5 ms, p95 ~8 ms, max ~26 ms per tick - over the 4 ms budget at 10 Hz tick rate, so the worker move below is warranted.
+- [ ] Move `sim/` into a Web Worker (transferable snapshots of dirty layers); re-run `npm run profile` to compare.
 - [x] Particle budget enforcement + dirty-range uploads: 20k ring buffer, per-frame upload limited to the emitted slots (two ranges across a wrap; `Particles.dirtyRanges`, `tests/particles.test.ts`).
 - [x] Dirty-rect texture upload for the region fire/scar overlay (`render/region/rowSpans.ts`, one narrow update range per changed row; `tests/row-spans.test.ts`). The terrain texture is static (built once), so it needs none.
 - [x] LOD for instanced buildings (`render/region/structureLod.ts`: detailed/simple mesh pair per structure type, hysteresis near/far switch by camera distance; `tests/structure-lod.test.ts`).
