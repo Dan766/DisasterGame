@@ -34,7 +34,9 @@ for (let i = 0; i < TICKS; i++) {
 times.sort((a, b) => a - b);
 const pct = (p: number) => times[Math.min(times.length - 1, Math.floor(p * times.length))]!;
 const mean = times.reduce((a, b) => a + b, 0) / times.length;
-console.log(`region ${REGION_SIZE}², ${TICKS} ticks${WITH_TSUNAMI ? ' + tsunami' : ''}, peak burning cells ${peakBurning}`);
+console.log(
+  `region ${REGION_SIZE}², ${TICKS} ticks${WITH_TSUNAMI ? ' + tsunami' : ''}, peak burning cells ${peakBurning}`,
+);
 console.log(
   `mean ${mean.toFixed(2)} ms  p50 ${pct(0.5).toFixed(2)}  p95 ${pct(0.95).toFixed(2)}  max ${times[times.length - 1]!.toFixed(2)}`,
 );
