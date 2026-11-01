@@ -416,7 +416,8 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 - [ ] Profile; move `sim/` into a Web Worker if the region tick exceeds ~4 ms (transferable snapshots of dirty layers).
 - [ ] Dirty-rect texture uploads; LOD for instanced buildings; particle budget enforcement.
 - [x] Audio: impact boom (delayed by distance), wind roar, fire crackle, UI clicks. Synthesised procedurally with WebAudio (`src/audio/`), so no sample files or `CREDITS.md` needed; `M` toggles mute. Mix maths in `audio/mix.ts` (`tests/audio-mix.test.ts`).
-- [ ] Juice: camera shake tuning, slow-mo on impact, satisfying UI sounds.
+- [x] Juice: slow-mo on region impacts (`core/slowmo.ts`, hold + eased recovery, scaled by impact size; `tests/slowmo.test.ts`).
+- [ ] Juice (remaining): camera shake tuning.
 - [x] Onboarding hint ("Pick a disaster → click the planet"): `ui/Onboarding.ts` banner, steps pick → aim, dismissed for good (localStorage) after the first launch/ignite.
 - **Done when:** steady 60 fps on a mid-range laptop with a large fire + tornado + 20k particles. A first-time user destroys something within 10 s without instructions.
 

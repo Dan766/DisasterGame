@@ -37,6 +37,7 @@ import { EventLog } from './ui/EventLog';
 import { createWind } from './sim/systems/wind';
 import { RegionPanel } from './ui/RegionPanel';
 import { StatsPanel } from './ui/StatsPanel';
+import { SlowMo } from './core/slowmo';
 import { SPEEDS, TimeControls } from './ui/TimeControls';
 import { Tooltip } from './ui/Tooltip';
 import { WorldPanel, randomSeed } from './ui/WorldPanel';
@@ -82,6 +83,7 @@ const clock = new FixedStepClock(GLOBE_STEP_MS);
 /** Region sim clock: 10 Hz at 1×, paused/sped up together with the globe clock. */
 const regionClock = new FixedStepClock(1000 / REGION_TICK_HZ);
 /** Region speed multiplier per time-control button (the globe's day/s rates make no sense here). */
+const slowMo = new SlowMo();
 const REGION_SPEEDS = [1, 2, 5, 10] as const;
 let regionSim: RegionSim | null = null;
 const windSetting = { fromDeg: 270, speed: 5 };
@@ -298,6 +300,7 @@ function strikeRegionAt(x: number, y: number, params: Params) {
     );
     regionView.updateFire(targetSim.region, performance.now() / 1000);
     regionFx.detonate(point, size);
+    slowMo.trigger(Math.min(1, size / 40));
     audio.boom(effects.megatons, 0, boomDelaySeconds(0));
   });
 }
@@ -573,7 +576,10 @@ renderer.setAnimationLoop((now) => {
   stats.begin();
   const frameMs = now - last;
   last = now;
-  const dt = Math.min(frameMs, 100) / 1000;
+  const realDt = Math.min(frameMs, 100) / 1000;
+  // Impact slow-mo only applies in the region, where the camera is close enough to savour it.
+  const timeScale = mode === 'region' ? slowMo.update(realDt) : (slowMo.reset(), 1);
+  const dt = realDt * timeScale;
 
   // The globe only advances while viewed from orbit; the region has its own 10 Hz clock.
   if (mode === 'globe') {
@@ -582,7 +588,7 @@ renderer.setAnimationLoop((now) => {
   } else if (regionSim) {
     regionClock.paused = clock.paused;
     regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;
-    const ticks = regionClock.advance(frameMs);
+    const ticks = regionClock.advance(frameMs * timeScale);
     for (let i = 0; i < ticks; i++) {
       regionSim.step(REGION_DT);
       for (const t of regionSim.tornados) regionView.markScar(t.col, t.row, t.radiusCells);
