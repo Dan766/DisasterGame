@@ -426,7 +426,7 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 ### M7+ — Expansion backlog (pick by fun)
 
-1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); globe wave-front overlay done (`GlobeSim.waveFronts()`, cool-tinted expanding ring in the globe shader); region-scale water flow sim done (`sim/systems/water.ts` virtual-pipes solver, `RegionSim.spawnTsunami(edge, amplitude)`, flood damage by depth; `tests/water.test.ts`); remaining: render the region water surface/wave (water plane depth texture + foam), wire the globe tsunami arrival into a region visit, and profile the solver (runs full-grid while awake, so it belongs in the region worker).
+1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); globe wave-front overlay done (`GlobeSim.waveFronts()`, cool-tinted expanding ring in the globe shader); region-scale water flow sim done (`sim/systems/water.ts` virtual-pipes solver, `RegionSim.spawnTsunami(edge, amplitude)`, flood damage by depth; `tests/water.test.ts`); profiler done (`npm run profile -- --tsunami`: 256² region, fires + EF4 tornado + 12 m wave from the west, mean 4.2 ms / p95 6.9 ms per tick vs. 3.1 / 7.2 ms without the wave, so the solver costs ~1 ms mean; it runs inside the region worker, off the render thread). Remaining: render the region water surface/wave (water plane depth texture + foam) and wire the globe tsunami arrival into a region visit.
 2. Earthquake + landslides
 3. Volcano (lava + ash)
 4. Sci-fi pack (playful, toy-tone disasters that reuse existing systems):

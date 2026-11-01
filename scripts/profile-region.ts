@@ -1,6 +1,6 @@
 /**
  * Region tick profiler (DESIGN.md M6): large wildfire + EF4 tornado on a 256² region.
- * Run: npm run profile
+ * Run: npm run profile  (add `-- --tsunami` to include a region tsunami / water solver)
  * Reports per-tick ms; the M6 budget is 4 ms before moving sim/ into a Web Worker.
  */
 import { performance } from 'node:perf_hooks';
@@ -19,6 +19,10 @@ sim.ignite(mid, mid, 12, 1);
 sim.ignite(mid - 60, mid + 30, 12, 1);
 sim.spawnTornado({ col: mid - 40, row: mid, ef: 4, headingDeg: 90, speed: 15, lifetimeS: 55 });
 
+// Tsunami scenario (M7): wave enters from the west; the solver runs full-grid while awake.
+const WITH_TSUNAMI = process.argv.includes('--tsunami');
+if (WITH_TSUNAMI) sim.spawnTsunami('W', 12, 60);
+
 const times: number[] = [];
 let peakBurning = 0;
 for (let i = 0; i < TICKS; i++) {
@@ -30,7 +34,7 @@ for (let i = 0; i < TICKS; i++) {
 times.sort((a, b) => a - b);
 const pct = (p: number) => times[Math.min(times.length - 1, Math.floor(p * times.length))]!;
 const mean = times.reduce((a, b) => a + b, 0) / times.length;
-console.log(`region ${REGION_SIZE}², ${TICKS} ticks, peak burning cells ${peakBurning}`);
+console.log(`region ${REGION_SIZE}², ${TICKS} ticks${WITH_TSUNAMI ? ' + tsunami' : ''}, peak burning cells ${peakBurning}`);
 console.log(
   `mean ${mean.toFixed(2)} ms  p50 ${pct(0.5).toFixed(2)}  p95 ${pct(0.95).toFixed(2)}  max ${times[times.length - 1]!.toFixed(2)}`,
 );
@@ -38,6 +42,6 @@ console.log(p95Verdict(pct(0.95)));
 
 function p95Verdict(p95: number): string {
   return p95 <= BUDGET_MS
-    ? `OK: p95 within ${BUDGET_MS} ms budget - no worker move needed`
-    : `OVER BUDGET: p95 exceeds ${BUDGET_MS} ms - move sim/ to a Web Worker`;
+    ? `OK: p95 within ${BUDGET_MS} ms budget`
+    : `OVER BUDGET: p95 exceeds ${BUDGET_MS} ms (sim already runs in the region Web Worker, so this is off the render thread)`;
 }
