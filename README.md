@@ -21,6 +21,6 @@ npm run check    # typecheck + lint + tests
 | `test` / `test:watch` | Vitest unit tests (`tests/`)            |
 | `lint` / `format`     | ESLint / Prettier                       |
 
-**Controls:** double-click land on the globe (or press `Enter` over it, which also works with a disaster armed) to dive into a regional diorama; `Esc` returns to the globe.
+**Controls:** double-click land on the globe (or press `Enter` over it, which also works with a disaster armed) to dive into a regional diorama; `Esc` returns to the globe; `M` mutes sound.
 
 **Architecture rule:** `src/core/` and `src/sim/` must not import three.js, touch the DOM, or call `Math.random`. ESLint enforces this so the simulation stays deterministic and can move to a Web Worker (see DESIGN.md §4).

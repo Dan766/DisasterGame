@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
+import { AudioEngine } from './audio/AudioEngine';
+import { boomDelaySeconds, crackleLevel, windRoarLevel } from './audio/mix';
 import { FixedStepClock } from './core/clock';
 import { GlobeControls } from './input/GlobeControls';
 import { GlobePicker, type GlobePick } from './input/Picking';
@@ -22,7 +24,7 @@ import { DISASTERS } from './sim/disasters/registry';
 import type { Params } from './sim/disasters/types';
 import { generateGlobe } from './sim/gen/globe';
 import { generateRegion, quantizeCenter } from './sim/gen/region';
-import { RegionDeltaStore, regionId } from './sim/region';
+import { FireState, RegionDeltaStore, regionId } from './sim/region';
 import { RegionSyncer } from './sim/sync';
 import { applyPendingStrikes, captureDelta } from './sim/systems/persistence';
 import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
@@ -126,6 +128,17 @@ const worldPanel = new WorldPanel((seed) => {
 });
 worldPanel.showWorld(world, initial.ms);
 
+const audio = new AudioEngine();
+// Browsers need a user gesture before audio can start; every press also gets a UI tick.
+window.addEventListener('pointerdown', (e) => {
+  audio.resume();
+  if (e.target instanceof HTMLButtonElement) audio.click();
+});
+window.addEventListener('keydown', (e) => {
+  audio.resume();
+  if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted);
+});
+
 const onboarding = new Onboarding();
 document.body.appendChild(onboarding.el);
 const disasterPanel = new DisasterPanel(DISASTERS, () => {
@@ -138,6 +151,7 @@ const timeControls = new TimeControls(clock);
 const tooltip = new Tooltip();
 const regionPanel = new RegionPanel(() => void exitRegion());
 
+let ambientTimer = 0;
 const stats = new Stats();
 stats.dom.style.cssText = 'position:absolute;bottom:12px;left:12px;';
 
@@ -284,6 +298,7 @@ function strikeRegionAt(x: number, y: number, params: Params) {
     );
     regionView.updateFire(targetSim.region, performance.now() / 1000);
     regionFx.detonate(point, size);
+    audio.boom(effects.megatons, 0, boomDelaySeconds(0));
   });
 }
 
@@ -450,6 +465,7 @@ function launch(disaster: string, params: Params, hit: GlobePick) {
         thermalRadiusKm: event.thermalRadiusKm,
       });
       fx.detonate(hit.point, event.megatons, event.blastRadiusKm);
+      audio.boom(event.megatons);
       globe.setCraters(world.craters);
       eventLog.add(event);
     },
@@ -602,6 +618,19 @@ renderer.setAnimationLoop((now) => {
     }
     regionFx.update(dt, regionSim?.shockwaves ?? [], heightAt);
   }
+  if (mode === 'region' && regionSim && !clock.paused) {
+    ambientTimer -= dt;
+    if (ambientTimer <= 0) {
+      ambientTimer = 0.2;
+      const fs = regionSim.region.fireState;
+      let burning = 0;
+      for (let i = 0; i < fs.length; i++) if (fs[i] === FireState.Burning) burning++;
+      audio.setAmbient(
+        windRoarLevel(regionSim.tornados.map((t) => t.radiusCells)),
+        crackleLevel(burning),
+      );
+    }
+  } else audio.setAmbient(0, 0);
 
   hudTimer -= dt;
   if (hudTimer <= 0) {
