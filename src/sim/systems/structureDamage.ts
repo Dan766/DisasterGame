@@ -16,6 +16,8 @@ export const Lethality = {
   Blast: 0.6,
   /** Wind-driven collapse (tornado). */
   Wind: 0.25,
+  /** Flood / tsunami: sudden, but many reach higher ground. */
+  Flood: 0.3,
 } as const;
 
 /** Running totals for one region visit; owned by `RegionSim`. */

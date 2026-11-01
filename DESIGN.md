@@ -192,7 +192,7 @@ These run independently of disasters and are where chain reactions come from:
 - Crater diameter ≈ `k · E^(1/3.4)` (tuned so a 1 km impactor gives ~15–20 km).
 - Fireball/thermal ignition radius ∝ E^(0.41). Air-blast (structure kill) radius ∝ E^(1/3).
 - Small (< ~50 m stony) impactors **airburst**: no crater, only blast and thermal.
-- Ocean impact → impact tsunami (done, `sim/systems/tsunami.ts`): amplitude from crater size, decays ~1/distance, travels at ~700 km/h by shortest path over ocean cells only (land shadows it), floods coastal cells by run-up vs. elevation as game-days pass; `GlobeSim` books deaths/damage and posts a `tsunami` event. Globe-scale only; no region water-flow view yet.
+- Ocean impact → impact tsunami (done, `sim/systems/tsunami.ts`): amplitude from crater size, decays ~1/distance, travels at ~700 km/h by shortest path over ocean cells only (land shadows it), floods coastal cells by run-up vs. elevation as game-days pass; `GlobeSim` books deaths/damage and posts a `tsunami` event. Region side: `RegionSim.spawnTsunami` feeds a wave through an edge into the shallow-water solver (`systems/water.ts`); no region water render or globe→region wiring yet.
 
 **Globe effects:** crater decal, immediate population/damage in cells within the blast radius, `ash` injected ∝ E. Ash advects east (simple zonal wind) and decays over ~2 game-years. `globalTempAnomaly` = −f(mean ash).
 
@@ -426,7 +426,7 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 ### M7+ — Expansion backlog (pick by fun)
 
-1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); globe wave-front overlay done (`GlobeSim.waveFronts()`, cool-tinted expanding ring in the globe shader); remaining: region-scale water flow/run-up view.
+1. ~~Tsunami~~ - globe-scale impact tsunami done (`tests/tsunami.test.ts`); globe wave-front overlay done (`GlobeSim.waveFronts()`, cool-tinted expanding ring in the globe shader); region-scale water flow sim done (`sim/systems/water.ts` virtual-pipes solver, `RegionSim.spawnTsunami(edge, amplitude)`, flood damage by depth; `tests/water.test.ts`); remaining: render the region water surface/wave (water plane depth texture + foam), wire the globe tsunami arrival into a region visit, and profile the solver (runs full-grid while awake, so it belongs in the region worker).
 2. Earthquake + landslides
 3. Volcano (lava + ash)
 4. Sci-fi pack (playful, toy-tone disasters that reuse existing systems):

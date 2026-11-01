@@ -1,7 +1,7 @@
 /**
  * Regional simulation driver (DESIGN.md §4): owns the wind field and the RNG stream for
  * one region and advances the shared field systems in a fixed order each tick
- * (wind → fire → damage ledger). Pure typed-array code, so it is deterministic and worker-ready.
+ * (wind → shockwave → tornado → tsunami/water → fire → damage ledger). Pure typed-array code, so it is deterministic and worker-ready.
  */
 import { createRng, type Rng } from '../core/rng';
 import type { RegionWorld } from './region';
@@ -16,6 +16,16 @@ import {
 } from './systems/impact';
 import { Tornado, type TornadoSpec } from './disasters/tornado';
 import { createLedger, type DamageLedger } from './systems/structureDamage';
+import {
+  createWaterField,
+  floodDamage,
+  launchTsunami,
+  stepTsunamiSource,
+  stepWater,
+  type Edge,
+  type TsunamiSource,
+  type WaterField,
+} from './systems/water';
 import { createWind, stepWind, type WindField } from './systems/wind';
 
 /** Region ticks per real second at 1× (DESIGN.md §4: 10 Hz). */
@@ -44,6 +54,13 @@ export class RegionSim {
   /** Sparse samples of tornado core positions this visit (for the persisted damage path). */
   readonly tornadoTrack: { col: number; row: number; radiusCells: number }[] = [];
 
+  /** Shallow-water flow state; asleep until a tsunami (or other water source) wakes it. */
+  readonly waterField: WaterField;
+  /** Active tsunami sources feeding waves in through region edges. */
+  readonly tsunamis: TsunamiSource[] = [];
+  /** Wet cell count after the last water step. */
+  wetCells = 0;
+
   private readonly fireRng: Rng;
   private readonly tornadoRng: Rng;
 
@@ -52,6 +69,7 @@ export class RegionSim {
     wind: WindField = createWind(),
   ) {
     this.wind = wind;
+    this.waterField = createWaterField(region.size);
     this.fireRng = createRng(region.seed).fork('fire');
     this.tornadoRng = createRng(region.seed).fork('tornado');
   }
@@ -81,6 +99,14 @@ export class RegionSim {
     return t;
   }
 
+  /** Sends a tsunami in through a region edge: a one-crest wave of `amplitudeM` meters. */
+  spawnTsunami(edge: Edge, amplitudeM: number, durationS = 60): TsunamiSource {
+    const t = launchTsunami(edge, amplitudeM, durationS);
+    this.tsunamis.push(t);
+    this.waterField.active = true;
+    return t;
+  }
+
   /** Records a core position when the tornado has moved far enough from its last sample. */
   private sampleTrack(t: Tornado): void {
     const r = Math.max(1, t.radiusCells);
@@ -103,6 +129,14 @@ export class RegionSim {
       t.step(this.region, this.wind, this.tornadoRng, dt, this.damage);
       this.sampleTrack(t);
       if (!t.alive) this.tornados.splice(k, 1);
+    }
+    for (let k = this.tsunamis.length - 1; k >= 0; k--) {
+      if (!stepTsunamiSource(this.region, this.waterField, this.tsunamis[k]!, 0, dt))
+        this.tsunamis.splice(k, 1);
+    }
+    if (this.waterField.active) {
+      this.wetCells = stepWater(this.region, this.waterField, dt);
+      floodDamage(this.region, 0, dt, this.damage);
     }
     this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt, this.damage);
     this.elapsed += dt;
