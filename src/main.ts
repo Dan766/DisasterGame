@@ -152,6 +152,13 @@ const eventLog = new EventLog();
 const timeControls = new TimeControls(clock);
 const tooltip = new Tooltip();
 const regionPanel = new RegionPanel(() => void exitRegion());
+// Keeps the disaster palette stacked just below the region banner, whatever its height.
+new ResizeObserver(() =>
+  hud.style.setProperty(
+    '--region-panel-bottom',
+    `${regionPanel.el.offsetTop + regionPanel.el.offsetHeight}px`,
+  ),
+).observe(regionPanel.el);
 
 let ambientTimer = 0;
 const stats = new Stats();
@@ -228,9 +235,11 @@ function handleClick(x: number, y: number) {
   }
   if (mode !== 'globe' || transition.active) return;
   const def = disasterPanel.selected;
-  if (!def?.spawnGlobe) return;
+  if (!def) return;
   const hit = picker.pick(x, y, camera, canvas);
   if (!hit) return;
+  // Region-only disasters (tornado, wildfire): clicking land dives in so they can be placed.
+  if (!def.spawnGlobe) return void enterRegionAt(hit);
   launch(def.id, disasterPanel.currentParams, hit);
 }
 
@@ -363,6 +372,7 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
       nextSyncAt = SYNC_INTERVAL_S;
       regionPanel.show(region, regionSim.wind);
       hud.classList.add('region-mode');
+      disasterPanel.setScale('region');
       mode = 'region';
       tooltip.hide();
       reticle.visible = false;
@@ -410,6 +420,7 @@ async function exitRegion(): Promise<void> {
     swap: () => {
       mode = 'globe';
       hud.classList.remove('region-mode');
+      disasterPanel.setScale('globe');
       regionPanel.hide();
       if (regionSim) {
         regionSyncer?.sync(sim);

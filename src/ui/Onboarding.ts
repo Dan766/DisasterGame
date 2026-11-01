@@ -8,7 +8,7 @@ export function onboardingStep(armed: boolean, acted: boolean): OnboardingStep {
 
 const MESSAGES: Record<Exclude<OnboardingStep, 'done'>, string> = {
   pick: 'Pick a disaster on the left…',
-  aim: '…then click the planet to unleash it',
+  aim: '…then click the planet (or a spot on land) to unleash it',
 };
 
 const STORAGE_KEY = 'cataclysm.onboarded';

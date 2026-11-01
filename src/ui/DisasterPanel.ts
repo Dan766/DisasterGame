@@ -10,6 +10,20 @@ import { formatParam } from './format';
 /** Slider positions per number control (log/linear mapped onto this range). */
 const STEPS = 1000;
 
+export type Scale = 'globe' | 'region';
+
+/** How to use the armed disaster from the current view. */
+export function disasterHint(def: DisasterDef, scale: Scale): string {
+  if (scale === 'region') {
+    return def.scales.includes('region')
+      ? 'Click the ground to unleash · Esc to leave the region'
+      : 'Works on the globe only · Esc to leave the region';
+  }
+  return def.scales.includes('globe')
+    ? 'Click the planet to launch · Esc to cancel'
+    : 'Region-scale: click land to zoom in, then click the ground';
+}
+
 /**
  * Disaster palette + parameter controls generated from each disaster's ParamSchema,
  * with a live readout of the selected configuration's reach.
@@ -17,6 +31,7 @@ const STEPS = 1000;
 export class DisasterPanel {
   readonly el = document.createElement('div');
   private selectedDef: DisasterDef | null = null;
+  private scale: Scale = 'globe';
   private params: Params = {};
   private preview: Preview | null = null;
   private readonly paramsByDisaster = new Map<string, Params>();
@@ -36,6 +51,13 @@ export class DisasterPanel {
       button.type = 'button';
       button.textContent = def.name;
       button.dataset.id = def.id;
+      if (!def.scales.includes('globe')) {
+        const tag = document.createElement('span');
+        tag.className = 'scale-tag';
+        tag.textContent = 'region';
+        button.title = 'Region-scale disaster: zoom into land to use it';
+        button.appendChild(tag);
+      }
       button.addEventListener('click', () =>
         this.select(this.selectedDef?.id === def.id ? null : def.id),
       );
@@ -56,6 +78,21 @@ export class DisasterPanel {
     return this.preview;
   }
 
+  /** Switches hints between the globe and the regional view. */
+  setScale(scale: Scale): void {
+    if (scale === this.scale) return;
+    this.scale = scale;
+    const hint = this.body.querySelector('.hint');
+    if (hint) hint.textContent = this.idleOrArmedHint();
+  }
+
+  private idleOrArmedHint(): string {
+    if (this.selectedDef) return disasterHint(this.selectedDef, this.scale);
+    return this.scale === 'region'
+      ? 'Pick a disaster, or click the ground to start a fire.'
+      : 'Pick a disaster, then click the planet.';
+  }
+
   select(id: string | null): void {
     if (this.selectedDef) this.paramsByDisaster.set(this.selectedDef.id, this.params);
     this.selectedDef = this.defs.find((d) => d.id === id) ?? null;
@@ -73,7 +110,7 @@ export class DisasterPanel {
     const def = this.selectedDef;
     if (!def) {
       this.preview = null;
-      this.body.innerHTML = `<div class="hint">Pick a disaster, then click the planet.</div>`;
+      this.body.innerHTML = `<div class="hint">${this.idleOrArmedHint()}</div>`;
       return;
     }
     this.body.innerHTML = '';
@@ -123,7 +160,7 @@ export class DisasterPanel {
     this.body.appendChild(facts);
     const hint = document.createElement('div');
     hint.className = 'hint';
-    hint.textContent = 'Click the planet to launch · Esc to cancel';
+    hint.textContent = this.idleOrArmedHint();
     this.body.appendChild(hint);
     this.updatePreview();
   }
