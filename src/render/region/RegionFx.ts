@@ -3,6 +3,7 @@
  * the expanding shockwave ring. Pure presentation; the sim decides what an impact does.
  * World units are cells (100 m), x east / z south, matching `RegionView`.
  */
+import { CameraShake } from '../../core/shake';
 import {
   AdditiveBlending,
   CanvasTexture,
@@ -54,7 +55,7 @@ export class RegionFx {
   private readonly glow = makeGlowTexture();
   private readonly ringGeo = new CylinderGeometry(1, 1, 1, 72, 1, true);
   private readonly trailGeo = new ConeGeometry(1, 1, 12, 1, true);
-  private shake = 0;
+  private readonly shake = new CameraShake();
   /** Shared pooled particles (ejecta now; smoke, sparks and debris as they land). */
   readonly particles = new Particles();
 
@@ -112,7 +113,7 @@ export class RegionFx {
     sprite.position.copy(point);
     this.group.add(sprite);
     this.flashes.push({ sprite, t: 0, size });
-    this.shake = Math.min(1, 0.25 + size / 120);
+    this.shake.add(Math.min(1, 0.25 + size / 120));
     this.ejecta(point, size);
   }
 
@@ -236,14 +237,14 @@ export class RegionFx {
       ring.mesh.material.opacity = 0.5 * (1 - wave.radius / wave.maxRadius) ** 1.5;
     }
 
-    this.shake = Math.max(0, this.shake - dt * 1.4);
+    this.shake.update(dt);
     this.particles.update(dt);
   }
 
-  /** Camera shake offset for this frame, in world units (scaled by the caller's distance). */
-  shakeOffset(out: Vector3): Vector3 {
-    const s = this.shake * this.shake;
-    return out.set((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
+  /** Camera shake offset for this frame in world units; `distance` is camera-to-target so the on-screen sway stays constant. */
+  shakeOffset(out: Vector3, distance = 100): Vector3 {
+    const o = this.shake.sample(out);
+    return out.set(o.x, o.y, o.z).multiplyScalar(distance * 0.02);
   }
 
   get busy(): boolean {
@@ -263,7 +264,7 @@ export class RegionFx {
     this.group.clear();
     this.group.add(...this.particles.meshes);
     this.particles.clear();
-    this.shake = 0;
+    this.shake.reset();
   }
 }
 

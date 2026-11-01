@@ -649,7 +649,10 @@ renderer.setAnimationLoop((now) => {
   timeControls.update(world.stats.simDays);
 
   if (mode === 'region') {
-    const shakeOffset = regionFx.shakeOffset(new THREE.Vector3()).multiplyScalar(6);
+    const shakeOffset = regionFx.shakeOffset(
+      new THREE.Vector3(),
+      regionCamera.position.distanceTo(regionControls.orbit.target),
+    );
     regionCamera.position.add(shakeOffset);
     postFx.render(regionView.scene, regionCamera);
     regionCamera.position.sub(shakeOffset);
