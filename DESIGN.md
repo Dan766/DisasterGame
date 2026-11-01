@@ -415,7 +415,8 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 
 - [ ] Profile; move `sim/` into a Web Worker if the region tick exceeds ~4 ms (transferable snapshots of dirty layers).
 - [x] Particle budget enforcement + dirty-range uploads: 20k ring buffer, per-frame upload limited to the emitted slots (two ranges across a wrap; `Particles.dirtyRanges`, `tests/particles.test.ts`).
-- [ ] Dirty-rect texture uploads for the region overlay/terrain textures; LOD for instanced buildings.
+- [x] Dirty-rect texture upload for the region fire/scar overlay (`render/region/rowSpans.ts`, one narrow update range per changed row; `tests/row-spans.test.ts`). The terrain texture is static (built once), so it needs none.
+- [ ] LOD for instanced buildings.
 - [x] Audio: impact boom (delayed by distance), wind roar, fire crackle, UI clicks. Synthesised procedurally with WebAudio (`src/audio/`), so no sample files or `CREDITS.md` needed; `M` toggles mute. Mix maths in `audio/mix.ts` (`tests/audio-mix.test.ts`).
 - [x] Juice: slow-mo on region impacts (`core/slowmo.ts`, hold + eased recovery, scaled by impact size; `tests/slowmo.test.ts`).
 - [x] Juice: camera shake tuning - trauma-based smooth shake (`core/shake.ts`, `tests/shake.test.ts`): amplitude = trauma², stacked hits never cancel a bigger one, offset scales with camera distance.

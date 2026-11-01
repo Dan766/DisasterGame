@@ -36,6 +36,7 @@ import {
   type RegionWorld,
 } from '../../sim/region';
 import { Biome } from '../../sim/world';
+import { RowSpans } from './rowSpans';
 
 /** World units per cell (100 m). Heights are meters / 100 × VERTICAL_EXAGGERATION. */
 const VERTICAL_EXAGGERATION = 1.6;
@@ -152,6 +153,7 @@ export class RegionView {
   private region: RegionWorld | null = null;
   private fireTex: DataTexture | null = null;
   private fireData: Uint8Array | null = null;
+  private fireSpans: RowSpans | null = null;
   /** Cells a tornado has passed over (0..255 scar strength), drawn under the fire colours. */
   private scar: Uint8Array | null = null;
   private trees: { mesh: InstancedMesh; cells: number[]; gone: Uint8Array } | null = null;
@@ -250,35 +252,63 @@ export class RegionView {
     const data = this.fireData;
     if (!tex || !data || this.region !== region) return;
     const n = REGION_SIZE;
+    const spans = (this.fireSpans ??= new RowSpans(n, n));
+    spans.reset();
     for (let row = 0; row < n; row++) {
-      const out = (n - 1 - row) * n; // texture row 0 is the south edge
+      const texRow = n - 1 - row; // texture row 0 is the south edge
+      const out = texRow * n;
       for (let col = 0; col < n; col++) {
         const i = row * n + col;
         const o = (out + col) * 4;
         const st = region.fireState[i];
+        let r = 0;
+        let g = 0;
+        let bl = 0;
+        let a = 0;
         if (st === FireState.Burning) {
           const flicker = 0.5 + 0.5 * Math.sin(timeSec * 9 + col * 1.7 + row * 2.3);
-          data[o] = 255;
-          data[o + 1] = 90 + flicker * 110;
-          data[o + 2] = 10;
-          data[o + 3] = 215;
+          r = 255;
+          g = 90 + flicker * 110;
+          bl = 10;
+          a = 215;
         } else if (st === FireState.Burnt) {
-          data[o] = 28;
-          data[o + 1] = 24;
-          data[o + 2] = 22;
-          data[o + 3] = 190;
+          r = 28;
+          g = 24;
+          bl = 22;
+          a = 190;
         } else if (this.scar && this.scar[i]! > 0) {
           // Tornado damage path: torn-up earth, a brown swath through the vegetation.
-          data[o] = 74;
-          data[o + 1] = 58;
-          data[o + 2] = 42;
-          data[o + 3] = this.scar[i]!;
-        } else {
-          data[o + 3] = 0;
+          r = 74;
+          g = 58;
+          bl = 42;
+          a = this.scar[i]!;
+        }
+        const pr = data[o]!;
+        const pg = data[o + 1]!;
+        const pb = data[o + 2]!;
+        const pa = data[o + 3]!;
+        if (a === 0) {
+          // Transparent: colour is irrelevant, only alpha matters.
+          if (pa !== 0) {
+            data[o + 3] = 0;
+            spans.mark(texRow, col);
+          }
+          continue;
+        }
+        data[o] = r;
+        data[o + 1] = g;
+        data[o + 2] = bl;
+        data[o + 3] = a;
+        if (data[o] !== pr || data[o + 1] !== pg || data[o + 2] !== pb || data[o + 3] !== pa) {
+          spans.mark(texRow, col);
         }
       }
     }
-    tex.needsUpdate = true;
+    // Dirty-rect upload: only the changed spans (one per touched row) go to the GPU.
+    if (!spans.isEmpty) {
+      for (const [start, count] of spans.spans()) tex.addUpdateRange(start * 4, count * 4);
+      tex.needsUpdate = true;
+    }
 
     const trees = this.trees;
     if (trees) {
@@ -330,6 +360,7 @@ export class RegionView {
   private buildFireOverlay(region: RegionWorld): void {
     const n = REGION_SIZE;
     this.scar = null;
+    this.fireSpans = null;
     const data = new Uint8Array(n * n * 4);
     const tex = this.track(new DataTexture(data, n, n, RGBAFormat));
     tex.magFilter = LinearFilter;
