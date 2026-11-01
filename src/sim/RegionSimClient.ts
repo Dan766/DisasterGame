@@ -8,6 +8,7 @@ import type { RegionWorld } from './region';
 import type { FireStepResult } from './systems/fire';
 import type { ImpactSpec, Shockwave } from './systems/impact';
 import type { TornadoSpec } from './disasters/tornado';
+import type { Edge } from './systems/water';
 import { createLedger, type DamageLedger } from './systems/structureDamage';
 import type { WindField } from './systems/wind';
 import type { FromWorker, RegionInit, Snapshot, TornadoView, Transport } from './regionProtocol';
@@ -116,6 +117,11 @@ export class RegionSimClient {
     this.transport.post({ type: 'tornado', spec });
   }
 
+  /** Sends a one-crest tsunami in through a region edge. */
+  spawnTsunami(edge: Edge, amplitudeM: number, durationS?: number): void {
+    this.transport.post({ type: 'tsunami', edge, amplitudeM, durationS });
+  }
+
   /** Resolves once the worker has resolved the impact and its terrain change is mirrored. */
   impact(spec: ImpactSpec): Promise<void> {
     return this.request((token) => ({ type: 'impact', spec, token }));
@@ -167,6 +173,7 @@ export class RegionSimClient {
       r.water.set(s.terrain.water);
       r.moisture.set(s.terrain.moisture);
     }
+    if (s.water) r.water.set(s.water);
     this.applyMeta(s);
     this.fresh = true;
     this.onSnapshot?.();

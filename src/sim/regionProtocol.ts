@@ -7,6 +7,7 @@ import type { ImpactSpec } from './systems/impact';
 import type { FireStepResult } from './systems/fire';
 import type { TornadoSpec } from './disasters/tornado';
 import type { Town } from './region';
+import type { Edge } from './systems/water';
 
 /** Everything the presentation needs from a tornado. */
 export interface TornadoView {
@@ -42,6 +43,7 @@ export type ToWorker =
   | { type: 'step'; ticks: number; token: number }
   | { type: 'ignite'; col: number; row: number; radiusCells?: number; intensity?: number }
   | { type: 'tornado'; spec: TornadoSpec }
+  | { type: 'tsunami'; edge: Edge; amplitudeM: number; durationS?: number }
   | { type: 'impact'; spec: ImpactSpec; token: number }
   | { type: 'wind'; fromDeg: number; speed: number }
   /** Asks for a snapshot reflecting every message sent before this one. */
@@ -65,6 +67,8 @@ export interface Snapshot {
   population: Float32Array;
   /** Present only after terrain changed (impacts). */
   terrain?: { height: Float32Array; water: Float32Array; moisture: Float32Array };
+  /** Surface water depth, sent while a flood is moving (and once more when it settles). */
+  water?: Float32Array;
   elapsed: number;
   lastFire: FireStepResult;
   windPx: Float32Array;

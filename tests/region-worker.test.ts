@@ -98,3 +98,36 @@ describe('region sim worker protocol', () => {
     expect(client.tornados[0]!.col).toBeGreaterThan(60);
   });
 });
+
+describe('region worker tsunami', () => {
+  it('floods the mirrored region like a local RegionSim', async () => {
+    const make = () => {
+      const r = createRegionWorld('t', 9, 0, 0, 0);
+      for (let row = 0; row < REGION_SIZE; row++)
+        for (let col = 0; col < REGION_SIZE; col++) {
+          const i = row * REGION_SIZE + col;
+          const h = col < 6 ? -10 : (col - 6) * 0.4 - 1;
+          r.height[i] = h;
+          if (h < 0) r.water[i] = -h;
+        }
+      return r;
+    };
+    const local = new RegionSim(make(), createWind());
+    local.spawnTsunami('W', 8, 100);
+    for (let i = 0; i < 3000; i++) local.step(REGION_DT);
+
+    const client = new RegionSimClient(make(), createWind(), loopback());
+    client.spawnTsunami('W', 8, 100);
+    let flooded = false;
+    for (let i = 0; i < 150; i++) {
+      client.advance(20);
+      await client.flush();
+      client.region.water.forEach((w, k) => {
+        if (w > 0.05 && k % REGION_SIZE > 9) flooded = true;
+      });
+    }
+
+    expect(Array.from(client.region.water)).toEqual(Array.from(local.region.water));
+    expect(flooded).toBe(true);
+  }, 90_000);
+});

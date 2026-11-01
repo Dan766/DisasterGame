@@ -45,6 +45,9 @@ export class RegionSimHost {
       case 'tornado':
         sim.spawnTornado(msg.spec);
         break;
+      case 'tsunami':
+        sim.spawnTsunami(msg.edge, msg.amplitudeM, msg.durationS);
+        break;
       case 'impact':
         sim.impact(msg.spec);
         this.terrainDirty = true;
@@ -60,6 +63,8 @@ export class RegionSimHost {
     }
     this.post();
   }
+
+  private waterWasActive = false;
 
   private waveId(w: Shockwave): number {
     let id = this.waveIds.get(w);
@@ -117,6 +122,12 @@ export class RegionSimHost {
         snap.terrain.moisture.buffer,
       );
     }
+    // Flood water moves every tick; ship it while the solver is awake, plus the settled state.
+    if ((sim.waterField.active || this.waterWasActive) && !snap.terrain) {
+      snap.water = r.water.slice();
+      transfer.push(snap.water.buffer);
+    }
+    this.waterWasActive = sim.waterField.active;
     if (sim.damage.collapsed.length !== this.sent.collapsed) {
       this.sent.collapsed = sim.damage.collapsed.length;
       snap.collapsed = sim.damage.collapsed.slice();
