@@ -8,6 +8,7 @@ import type { RegionWorld } from './region';
 import type { FireStepResult } from './systems/fire';
 import type { ImpactSpec, Shockwave } from './systems/impact';
 import type { TornadoSpec } from './disasters/tornado';
+import type { QuakeSpec } from './systems/earthquake';
 import type { Edge } from './systems/water';
 import { createLedger, type DamageLedger } from './systems/structureDamage';
 import type { WindField } from './systems/wind';
@@ -27,6 +28,8 @@ export class RegionSimClient {
   readonly shockwaves: Shockwave[] = [];
   readonly craters: { col: number; row: number; radiusCells: number }[] = [];
   readonly tornados: TornadoView[] = [];
+  /** Earthquakes currently shaking in the worker. */
+  quakesActive = 0;
   readonly tornadoTrack: { col: number; row: number; radiusCells: number }[] = [];
   /** Called after each snapshot is applied. */
   onSnapshot: (() => void) | null = null;
@@ -117,6 +120,11 @@ export class RegionSimClient {
     this.transport.post({ type: 'tornado', spec });
   }
 
+  /** Starts an earthquake at the epicentre. */
+  spawnQuake(spec: QuakeSpec): void {
+    this.transport.post({ type: 'quake', spec });
+  }
+
   /** Sends a one-crest tsunami in through a region edge. */
   spawnTsunami(edge: Edge, amplitudeM: number, durationS?: number): void {
     this.transport.post({ type: 'tsunami', edge, amplitudeM, durationS });
@@ -195,6 +203,7 @@ export class RegionSimClient {
     if (s.craters) replace(this.craters, s.craters);
     if (s.tornadoTrack) replace(this.tornadoTrack, s.tornadoTrack);
     replace(this.tornados, s.tornados);
+    this.quakesActive = s.quakesActive;
     // Rings are keyed by object identity in the view, so keep one object per wave id.
     const live = new Set<number>();
     this.shockwaves.length = 0;

@@ -18,6 +18,10 @@ export const Lethality = {
   Wind: 0.25,
   /** Flood / tsunami: sudden, but many reach higher ground. */
   Flood: 0.3,
+  /** Ground shaking: buildings pancake, but people often get out. */
+  Quake: 0.15,
+  /** Buried by a landslide: nearly always fatal. */
+  Landslide: 0.7,
 } as const;
 
 /** Running totals for one region visit; owned by `RegionSim`. */

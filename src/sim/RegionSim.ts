@@ -1,7 +1,7 @@
 /**
  * Regional simulation driver (DESIGN.md §4): owns the wind field and the RNG stream for
  * one region and advances the shared field systems in a fixed order each tick
- * (wind → shockwave → tornado → tsunami/water → fire → damage ledger). Pure typed-array code, so it is deterministic and worker-ready.
+ * (wind → shockwave → tornado → earthquake → tsunami/water → fire → damage ledger). Pure typed-array code, so it is deterministic and worker-ready.
  */
 import { createRng, type Rng } from '../core/rng';
 import type { RegionWorld } from './region';
@@ -15,6 +15,7 @@ import {
   type Shockwave,
 } from './systems/impact';
 import { Tornado, type TornadoSpec } from './disasters/tornado';
+import { Quake, stepQuake, type QuakeSpec } from './systems/earthquake';
 import { createLedger, type DamageLedger } from './systems/structureDamage';
 import {
   createWaterField,
@@ -61,6 +62,14 @@ export class RegionSim {
   /** Wet cell count after the last water step. */
   wetCells = 0;
 
+  /** Active earthquakes. */
+  readonly quakes: Quake[] = [];
+  /** Bumped whenever a quake changes terrain heights (hosts ship the terrain when it moves). */
+  terrainVersion = 0;
+  /** Landslides triggered this visit. */
+  landslides = 0;
+
+  private readonly quakeRng: Rng;
   private readonly fireRng: Rng;
   private readonly tornadoRng: Rng;
 
@@ -72,6 +81,7 @@ export class RegionSim {
     this.waterField = createWaterField(region.size);
     this.fireRng = createRng(region.seed).fork('fire');
     this.tornadoRng = createRng(region.seed).fork('tornado');
+    this.quakeRng = createRng(region.seed).fork('quake');
   }
 
   /** Debug/wildfire ignition brush at a (fractional) cell. Returns how many cells caught. */
@@ -97,6 +107,13 @@ export class RegionSim {
     const t = new Tornado(spec);
     this.tornados.push(t);
     return t;
+  }
+
+  /** Starts an earthquake at the epicentre; it shakes until its duration runs out. */
+  spawnQuake(spec: QuakeSpec): Quake {
+    const q = new Quake(spec);
+    this.quakes.push(q);
+    return q;
   }
 
   /** Sends a tsunami in through a region edge: a one-crest wave of `amplitudeM` meters. */
@@ -129,6 +146,13 @@ export class RegionSim {
       t.step(this.region, this.wind, this.tornadoRng, dt, this.damage);
       this.sampleTrack(t);
       if (!t.alive) this.tornados.splice(k, 1);
+    }
+    for (let k = this.quakes.length - 1; k >= 0; k--) {
+      const q = this.quakes[k]!;
+      const res = stepQuake(this.region, q, this.quakeRng, dt, this.damage);
+      this.landslides += res.landslides;
+      if (res.terrainChanged) this.terrainVersion++;
+      if (!q.alive) this.quakes.splice(k, 1);
     }
     for (let k = this.tsunamis.length - 1; k >= 0; k--) {
       if (!stepTsunamiSource(this.region, this.waterField, this.tsunamis[k]!, 0, dt))

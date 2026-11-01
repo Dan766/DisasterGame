@@ -15,6 +15,7 @@ export interface HostPort {
 export class RegionSimHost {
   private sim: RegionSim | null = null;
   private terrainDirty = false;
+  private terrainVersion = 0;
   private tokens: number[] = [];
   private sent = { collapsed: 0, craters: 0, track: 0 };
   private readonly waveIds = new WeakMap<Shockwave, number>();
@@ -47,6 +48,9 @@ export class RegionSimHost {
         break;
       case 'tsunami':
         sim.spawnTsunami(msg.edge, msg.amplitudeM, msg.durationS);
+        break;
+      case 'quake':
+        sim.spawnQuake(msg.spec);
         break;
       case 'impact':
         sim.impact(msg.spec);
@@ -90,6 +94,7 @@ export class RegionSimHost {
       windPy: sim.wind.py.slice(),
       deaths: sim.damage.deaths,
       structuresLost: sim.damage.structuresLost,
+      quakesActive: sim.quakes.length,
       tornados: sim.tornados.map((t) => ({
         col: t.col,
         row: t.row,
@@ -109,6 +114,10 @@ export class RegionSimHost {
       snap.windPx.buffer,
       snap.windPy.buffer,
     ];
+    if (sim.terrainVersion !== this.terrainVersion) {
+      this.terrainVersion = sim.terrainVersion;
+      this.terrainDirty = true;
+    }
     if (this.terrainDirty) {
       this.terrainDirty = false;
       snap.terrain = {

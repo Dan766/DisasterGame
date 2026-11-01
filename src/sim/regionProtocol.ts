@@ -8,6 +8,7 @@ import type { FireStepResult } from './systems/fire';
 import type { TornadoSpec } from './disasters/tornado';
 import type { Town } from './region';
 import type { Edge } from './systems/water';
+import type { QuakeSpec } from './systems/earthquake';
 
 /** Everything the presentation needs from a tornado. */
 export interface TornadoView {
@@ -44,6 +45,7 @@ export type ToWorker =
   | { type: 'ignite'; col: number; row: number; radiusCells?: number; intensity?: number }
   | { type: 'tornado'; spec: TornadoSpec }
   | { type: 'tsunami'; edge: Edge; amplitudeM: number; durationS?: number }
+  | { type: 'quake'; spec: QuakeSpec }
   | { type: 'impact'; spec: ImpactSpec; token: number }
   | { type: 'wind'; fromDeg: number; speed: number }
   /** Asks for a snapshot reflecting every message sent before this one. */
@@ -80,6 +82,8 @@ export interface Snapshot {
   craters?: { col: number; row: number; radiusCells: number }[];
   tornadoTrack?: { col: number; row: number; radiusCells: number }[];
   tornados: TornadoView[];
+  /** Number of earthquakes currently shaking (drives camera shake / audio). */
+  quakesActive: number;
   shockwaves: ShockwaveSnap[];
 }
 
