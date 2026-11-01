@@ -59,6 +59,15 @@ export interface WaveFront {
   alpha: number;
 }
 
+/** A wave that has come ashore on a globe cell; regions inside the cell replay it on first entry. */
+export interface LandfallRecord {
+  cell: number;
+  /** Where the wave came from, for choosing the region edge it enters through. */
+  sourceLat: number;
+  sourceLon: number;
+  runupM: number;
+}
+
 interface ActiveTsunami {
   lat: number;
   lon: number;
@@ -90,6 +99,8 @@ export class GlobeSim {
   private readonly events: SimEvent[] = [];
   private readonly burning = new Set<number>();
   private readonly tsunamis: ActiveTsunami[] = [];
+  /** Every landfall so far, in arrival order. */
+  readonly landfalls: LandfallRecord[] = [];
   private readonly rng: Rng;
   private nextEventId = 1;
   /** Famine survival factor not yet applied to the per-cell population layer. */
@@ -210,6 +221,7 @@ export class GlobeSim {
         ts.deaths += deaths;
         ts.damageUSD += people * VALUE_PER_PERSON_USD * (after - before);
         ts.maxRunupM = Math.max(ts.maxRunupM, runupM);
+        this.landfalls.push({ cell, sourceLat: ts.lat, sourceLon: ts.lon, runupM });
         this.dirty.effects = true;
       }
       if (ts.next < ts.landfalls.length) continue;

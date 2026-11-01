@@ -92,6 +92,7 @@ export function captureDelta(
       ...(visit.tornadoTrack ?? []).map((s) => ({ ...s })),
     ],
     strikesApplied: prior?.strikesApplied ?? 0,
+    landfallsApplied: prior?.landfallsApplied ?? 0,
   };
 }
 

@@ -29,6 +29,7 @@ import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { FireState, RegionDeltaStore, regionId } from './sim/region';
 import { RegionSyncer } from './sim/sync';
 import { applyPendingStrikes, captureDelta } from './sim/systems/persistence';
+import { planRegionTsunami } from './sim/systems/regionTsunami';
 import { REGION_TICK_HZ } from './sim/RegionSim';
 import { RegionSimClient } from './sim/RegionSimClient';
 import { createWorkerTransport } from './sim/workerTransport';
@@ -371,6 +372,12 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         regionDeltas.get(region.id),
       );
       if (caughtUp) regionDeltas.set(region.id, caughtUp);
+      const tsunamiPlan = planRegionTsunami(
+        region,
+        cellAt(world, region.lat, region.lon),
+        sim.landfalls,
+        regionDeltas.get(region.id)?.landfallsApplied ?? 0,
+      );
       regionView.show(region);
       for (const s of regionDeltas.get(region.id)?.tornadoTrack ?? []) {
         regionView.markScar(s.col, s.row, s.radiusCells);
@@ -382,6 +389,11 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         createWorkerTransport(),
       );
       regionSim.onSnapshot = markTornadoScars;
+      if (tsunamiPlan) {
+        // A globe tsunami came ashore here while the player was away: the wave arrives now.
+        regionSim.spawnTsunami(tsunamiPlan.edge, tsunamiPlan.amplitudeM);
+      }
+      regionDeltas.getOrCreate(region.id).landfallsApplied = sim.landfalls.length;
       regionSyncer = new RegionSyncer(region, world);
       nextSyncAt = SYNC_INTERVAL_S;
       regionPanel.show(region, regionSim.wind);

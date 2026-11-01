@@ -35,6 +35,8 @@ export interface RegionDelta {
   tornadoTrack: { col: number; row: number; radiusCells: number }[];
   /** How many globe-scale strikes (see `RegionDeltaStore.strikes`) were already folded in. */
   strikesApplied: number;
+  /** How many globe tsunami landfalls (see `GlobeSim.landfalls`) were already replayed here. */
+  landfallsApplied: number;
 }
 
 export function emptyDelta(): RegionDelta {
@@ -46,6 +48,7 @@ export function emptyDelta(): RegionDelta {
     deaths: 0,
     tornadoTrack: [],
     strikesApplied: 0,
+    landfallsApplied: 0,
   };
 }
 
