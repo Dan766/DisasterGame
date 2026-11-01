@@ -28,7 +28,9 @@ import { generateRegion, quantizeCenter } from './sim/gen/region';
 import { FireState, RegionDeltaStore, regionId } from './sim/region';
 import { RegionSyncer } from './sim/sync';
 import { applyPendingStrikes, captureDelta } from './sim/systems/persistence';
-import { REGION_DT, REGION_TICK_HZ, RegionSim } from './sim/RegionSim';
+import { REGION_TICK_HZ } from './sim/RegionSim';
+import { RegionSimClient } from './sim/RegionSimClient';
+import { createWorkerTransport } from './sim/workerTransport';
 import { meanAsh } from './sim/systems/atmosphere';
 import { impactSpecFromKm } from './sim/systems/impact';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
@@ -86,7 +88,7 @@ const regionClock = new FixedStepClock(1000 / REGION_TICK_HZ);
 /** Region speed multiplier per time-control button (the globe's day/s rates make no sense here). */
 const slowMo = new SlowMo();
 const REGION_SPEEDS = [1, 2, 5, 10] as const;
-let regionSim: RegionSim | null = null;
+let regionSim: RegionSimClient | null = null;
 const windSetting = { fromDeg: 270, speed: 5 };
 
 // --- Regional view ---------------------------------------------------------
@@ -152,7 +154,10 @@ const statsPanel = new StatsPanel();
 const eventLog = new EventLog();
 const timeControls = new TimeControls(clock);
 const tooltip = new Tooltip();
-const regionPanel = new RegionPanel(() => void exitRegion());
+const regionPanel = new RegionPanel(
+  () => void exitRegion(),
+  (fromDeg, speed) => regionSim?.setWind(fromDeg, speed),
+);
 // Keeps the disaster palette stacked just below the region banner, whatever its height.
 new ResizeObserver(() =>
   hud.style.setProperty(
@@ -260,9 +265,7 @@ function igniteAt(x: number, y: number, params?: Params) {
   const cell = regionView.pickCell(igniteRay.ray.origin, igniteRay.ray.direction);
   if (!cell) return;
   const brush = params ? wildfireSpecFromParams(params) : null;
-  if (regionSim.ignite(cell.col, cell.row, brush?.radiusCells, brush?.intensity) > 0) {
-    regionView.updateFire(regionSim.region, performance.now() / 1000);
-  }
+  regionSim.ignite(cell.col, cell.row, brush?.radiusCells, brush?.intensity);
 }
 
 /** Region-scale tornado: touches down at the clicked cell and travels along its heading. */
@@ -303,13 +306,16 @@ function strikeRegionAt(x: number, y: number, params: Params) {
   const size = Math.max(3, Math.min(40, spec.thermalRadiusCells * 0.5));
   regionFx.launch(point, Number(params.angleDeg ?? 90), Math.max(1.5, size * 0.25), () => {
     if (regionSim !== targetSim) return; // left the region mid-flight
-    targetSim.impact(spec);
-    const crater = targetSim.craters[targetSim.craters.length - 1];
-    regionView.remeshTerrain(
-      targetSim.region,
-      crater ?? { col: cell.col, row: cell.row, radiusCells: spec.blastRadiusCells * 0.3 },
-    );
-    regionView.updateFire(targetSim.region, performance.now() / 1000);
+    // The worker resolves the strike; the terrain is remeshed once its snapshot is mirrored.
+    void targetSim.impact(spec).then(() => {
+      if (regionSim !== targetSim) return;
+      const crater = targetSim.craters[targetSim.craters.length - 1];
+      regionView.remeshTerrain(
+        targetSim.region,
+        crater ?? { col: cell.col, row: cell.row, radiusCells: spec.blastRadiusCells * 0.3 },
+      );
+      regionView.updateFire(targetSim.region, performance.now() / 1000);
+    });
     regionFx.detonate(point, size);
     slowMo.trigger(Math.min(1, size / 40));
     audio.boom(effects.megatons, 0, boomDelaySeconds(0));
@@ -369,7 +375,12 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
         regionView.markScar(s.col, s.row, s.radiusCells);
       }
       regionView.updateFire(region, performance.now() / 1000);
-      regionSim = new RegionSim(region, createWind(windSetting.fromDeg, windSetting.speed));
+      regionSim = new RegionSimClient(
+        region,
+        createWind(windSetting.fromDeg, windSetting.speed),
+        createWorkerTransport(),
+      );
+      regionSim.onSnapshot = markTornadoScars;
       regionSyncer = new RegionSyncer(region, world);
       nextSyncAt = SYNC_INTERVAL_S;
       regionPanel.show(region, regionSim.wind);
@@ -389,6 +400,12 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
       regionControls.enabled = true;
     },
   });
+}
+
+/** Scars the terrain under each tornado core as snapshots arrive from the sim worker. */
+function markTornadoScars(): void {
+  if (!regionSim) return;
+  for (const t of regionSim.tornados) regionView.markScar(t.col, t.row, t.radiusCells);
 }
 
 /** Region sim-seconds between periodic region → globe syncs. */
@@ -419,7 +436,9 @@ async function exitRegion(): Promise<void> {
         },
         easeInCubic,
       ),
-    swap: () => {
+    swap: async () => {
+      // Pull the worker's final state into the mirror before it is booked.
+      await regionSim?.flush();
       mode = 'globe';
       hud.classList.remove('region-mode');
       disasterPanel.setScale('globe');
@@ -435,6 +454,7 @@ async function exitRegion(): Promise<void> {
       regionView.clear();
       regionFx.clear();
       regionView.scene.add(regionFx.group);
+      regionSim?.dispose();
       regionSim = null;
       regionSyncer = null;
       camera.position.copy(saved).setLength(1.15); // start close to the surface, settle out
@@ -602,15 +622,12 @@ renderer.setAnimationLoop((now) => {
     regionClock.paused = clock.paused;
     regionClock.speed = REGION_SPEEDS[Math.max(0, SPEEDS.indexOf(clock.speed as never))] ?? 1;
     const ticks = regionClock.advance(frameMs * timeScale);
-    for (let i = 0; i < ticks; i++) {
-      regionSim.step(REGION_DT);
-      for (const t of regionSim.tornados) regionView.markScar(t.col, t.row, t.radiusCells);
-    }
+    if (ticks > 0) regionSim.advance(ticks);
     if (regionSyncer && regionSim.elapsed >= nextSyncAt) {
       regionSyncer.sync(sim);
       nextSyncAt = regionSim.elapsed + SYNC_INTERVAL_S;
     }
-    if (ticks > 0 || regionSim.lastFire.burning > 0)
+    if (regionSim.takeFresh() || regionSim.lastFire.burning > 0)
       regionView.updateFire(regionSim.region, now / 1000);
   }
   globe.syncLayers(world, sim.dirty);

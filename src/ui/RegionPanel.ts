@@ -9,7 +9,10 @@ export class RegionPanel {
 
   private wind: WindField | null = null;
 
-  constructor(onExit: () => void) {
+  constructor(
+    onExit: () => void,
+    onWindChange: (fromDeg: number, speed: number) => void = () => {},
+  ) {
     this.el.className = 'panel region-panel';
     this.el.hidden = true;
     this.el.addEventListener('click', (e) => {
@@ -22,6 +25,7 @@ export class RegionPanel {
       if (input.dataset.wind === 'dir') this.wind.fromDeg = value;
       else this.wind.speed = value;
       this.updateWindLabels();
+      onWindChange(this.wind.fromDeg, this.wind.speed);
     });
   }
 

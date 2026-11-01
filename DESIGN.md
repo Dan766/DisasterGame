@@ -146,7 +146,7 @@ Observe world → pick disaster + tune params → pick target → watch it unfol
 - **Fixed timestep:** the region uses 10 Hz sim ticks (`dt = 0.1 s` game time × speed multiplier). The globe uses 1 Hz ticks where 1 tick = 1 game-day. Rendering interpolates.
 - **Commands:** all player actions are serializable commands (`{type:'spawn', disaster:'asteroid', params, target}`). This gives free replay and debugging, and makes the worker move trivial.
 - **Determinism:** a seeded PRNG (mulberry32 / sfc32) per system. No `Math.random` in sim code.
-- **Worker move (M6):** start single-threaded. Move to a worker with transferable buffers when profiling demands it. SharedArrayBuffer needs COOP/COEP headers, so avoid it unless necessary.
+- **Worker move (M6, done for the region sim):** started single-threaded; profiling (~4.5 ms mean per tick) moved it to a worker with transferable buffers. SharedArrayBuffer needs COOP/COEP headers, so avoid it unless necessary.
 
 ### 4.1 Disaster interface
 
@@ -414,7 +414,7 @@ Shared visual infrastructure that M5's tornado and wildfire also need.
 ### M6 — Performance & polish (2–3 days)
 
 - [x] Profile the region tick (`npm run profile`, `scripts/profile-region.ts`: 256² region, two 12-cell fires + EF4 tornado, ~28k burning cells peak). Result (Node, single thread): mean ~4.5 ms, p95 ~8 ms, max ~26 ms per tick - over the 4 ms budget at 10 Hz tick rate, so the worker move below is warranted.
-- [ ] Move `sim/` into a Web Worker (transferable snapshots of dirty layers); re-run `npm run profile` to compare.
+- [x] Region sim runs in a Web Worker (`sim/regionWorker.ts` hosts `RegionSimHost`; the main thread holds a `RegionSimClient` mirror refreshed from transferable per-layer snapshots, one outstanding step request with a capped tick backlog, `flush()` before exit/sync). Terrain layers are sent only after impacts. Protocol in `sim/regionProtocol.ts`; loopback tests in `tests/region-worker.test.ts`. `npm run profile` still measures the raw tick cost, which now runs off the render thread. Not yet verified in a real browser (headless, no GPU).
 - [x] Particle budget enforcement + dirty-range uploads: 20k ring buffer, per-frame upload limited to the emitted slots (two ranges across a wrap; `Particles.dirtyRanges`, `tests/particles.test.ts`).
 - [x] Dirty-rect texture upload for the region fire/scar overlay (`render/region/rowSpans.ts`, one narrow update range per changed row; `tests/row-spans.test.ts`). The terrain texture is static (built once), so it needs none.
 - [x] LOD for instanced buildings (`render/region/structureLod.ts`: detailed/simple mesh pair per structure type, hysteresis near/far switch by camera distance; `tests/structure-lod.test.ts`).

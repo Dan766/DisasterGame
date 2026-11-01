@@ -9,7 +9,7 @@
  * World units are cells (100 m), x east / z south, matching `RegionView`.
  */
 import { REGION_SIZE } from '../../sim/region';
-import type { Tornado } from '../../sim/disasters/tornado';
+import type { TornadoView } from '../../sim/regionProtocol';
 import type { ParticleSink } from './FireEmitter';
 
 /** Seconds between emit passes (real time). */
@@ -32,7 +32,7 @@ export class TornadoEmitter {
   /** Call once per rendered frame with real dt. Returns the number of particles emitted. */
   update(
     dt: number,
-    tornados: readonly Tornado[],
+    tornados: readonly TornadoView[],
     heightAt: (x: number, z: number) => number,
   ): number {
     this.acc += dt;
