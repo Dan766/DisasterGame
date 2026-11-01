@@ -62,7 +62,11 @@ export function rleDecode(runs: readonly number[], length: number): Uint8Array {
  */
 export function captureDelta(
   region: RegionWorld,
-  visit: { craters: RegionDelta['craters']; damage: DamageLedger },
+  visit: {
+    craters: RegionDelta['craters'];
+    damage: DamageLedger;
+    tornadoTrack?: RegionDelta['tornadoTrack'];
+  },
   prior?: RegionDelta,
 ): RegionDelta {
   const mask = new Uint8Array(region.fireState.length);
@@ -83,6 +87,10 @@ export function captureDelta(
     destroyedStructIds: [...destroyed].sort((a, b) => a - b),
     survivors: [...survivors].flat(),
     deaths: (prior?.deaths ?? 0) + visit.damage.deaths,
+    tornadoTrack: [
+      ...(prior?.tornadoTrack ?? []),
+      ...(visit.tornadoTrack ?? []).map((s) => ({ ...s })),
+    ],
     strikesApplied: prior?.strikesApplied ?? 0,
   };
 }

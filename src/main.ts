@@ -329,6 +329,9 @@ async function enterRegionAt(hit: GlobePick | null): Promise<void> {
       );
       if (caughtUp) regionDeltas.set(region.id, caughtUp);
       regionView.show(region);
+      for (const s of regionDeltas.get(region.id)?.tornadoTrack ?? []) {
+        regionView.markScar(s.col, s.row, s.radiusCells);
+      }
       regionView.updateFire(region, performance.now() / 1000);
       regionSim = new RegionSim(region, createWind(windSetting.fromDeg, windSetting.speed));
       regionSyncer = new RegionSyncer(region, world);

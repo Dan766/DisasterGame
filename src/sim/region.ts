@@ -31,6 +31,8 @@ export interface RegionDelta {
   /** Flat `[cell, population, ...]` pairs: residents left in cells whose structure collapsed. */
   survivors: number[];
   deaths: number;
+  /** Tornado damage path: sampled core positions, replayed as ground scars on re-entry. */
+  tornadoTrack: { col: number; row: number; radiusCells: number }[];
   /** How many globe-scale strikes (see `RegionDeltaStore.strikes`) were already folded in. */
   strikesApplied: number;
 }
@@ -42,6 +44,7 @@ export function emptyDelta(): RegionDelta {
     destroyedStructIds: [],
     survivors: [],
     deaths: 0,
+    tornadoTrack: [],
     strikesApplied: 0,
   };
 }

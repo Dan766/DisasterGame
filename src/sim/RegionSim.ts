@@ -41,6 +41,9 @@ export class RegionSim {
   /** Active tornados (for the view's funnel effect). */
   readonly tornados: Tornado[] = [];
 
+  /** Sparse samples of tornado core positions this visit (for the persisted damage path). */
+  readonly tornadoTrack: { col: number; row: number; radiusCells: number }[] = [];
+
   private readonly fireRng: Rng;
   private readonly tornadoRng: Rng;
 
@@ -78,6 +81,16 @@ export class RegionSim {
     return t;
   }
 
+  /** Records a core position when the tornado has moved far enough from its last sample. */
+  private sampleTrack(t: Tornado): void {
+    const r = Math.max(1, t.radiusCells);
+    for (let k = this.tornadoTrack.length - 1, seen = 0; k >= 0 && seen < 8; k--, seen++) {
+      const s = this.tornadoTrack[k]!;
+      if (Math.hypot(s.col - t.col, s.row - t.row) < r * 0.5) return;
+    }
+    this.tornadoTrack.push({ col: t.col, row: t.row, radiusCells: r });
+  }
+
   /** Advances all region systems by one fixed tick. */
   step(dt: number = REGION_DT): FireStepResult {
     stepWind(this.wind, dt);
@@ -88,6 +101,7 @@ export class RegionSim {
     for (let k = this.tornados.length - 1; k >= 0; k--) {
       const t = this.tornados[k]!;
       t.step(this.region, this.wind, this.tornadoRng, dt, this.damage);
+      this.sampleTrack(t);
       if (!t.alive) this.tornados.splice(k, 1);
     }
     this.lastFire = stepFire(this.region, this.wind, this.fireRng, dt, this.damage);

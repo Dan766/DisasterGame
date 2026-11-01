@@ -136,3 +136,18 @@ describe('global strikes replayed on region entry', () => {
     expect(applyPendingStrikes(region, [s])).not.toBeNull();
   });
 });
+
+describe('tornado scar persistence', () => {
+  it('records a sparse track and accumulates it across visits', () => {
+    const r1 = generateRegion(world, city.lat, city.lon);
+    const s1 = new RegionSim(r1);
+    s1.spawnTornado({ col: 100, row: 100, ef: 2, headingDeg: 90, speed: 12, lifetimeS: 30 });
+    visit(s1, 150);
+    expect(s1.tornadoTrack.length).toBeGreaterThan(1);
+    expect(s1.tornadoTrack.length).toBeLessThan(150);
+    const d1 = captureDelta(r1, s1);
+    expect(d1.tornadoTrack).toEqual(s1.tornadoTrack);
+    const d2 = captureDelta(r1, new RegionSim(r1), d1);
+    expect(d2.tornadoTrack).toEqual(d1.tornadoTrack);
+  });
+});
