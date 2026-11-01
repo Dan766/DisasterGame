@@ -30,6 +30,7 @@ import { meanAsh } from './sim/systems/atmosphere';
 import { impactSpecFromKm } from './sim/systems/impact';
 import { cellAt, livingPopulation, type GlobalWorld } from './sim/world';
 import { DisasterPanel } from './ui/DisasterPanel';
+import { Onboarding } from './ui/Onboarding';
 import { EventLog } from './ui/EventLog';
 import { createWind } from './sim/systems/wind';
 import { RegionPanel } from './ui/RegionPanel';
@@ -125,7 +126,12 @@ const worldPanel = new WorldPanel((seed) => {
 });
 worldPanel.showWorld(world, initial.ms);
 
-const disasterPanel = new DisasterPanel(DISASTERS, () => updateTargeting());
+const onboarding = new Onboarding();
+document.body.appendChild(onboarding.el);
+const disasterPanel = new DisasterPanel(DISASTERS, () => {
+  onboarding.setArmed(disasterPanel.selected !== null);
+  updateTargeting();
+});
 const statsPanel = new StatsPanel();
 const eventLog = new EventLog();
 const timeControls = new TimeControls(clock);
@@ -195,6 +201,7 @@ window.addEventListener('pointerup', (e) => {
 });
 
 function handleClick(x: number, y: number) {
+  if (mode === 'region' || disasterPanel.selected) onboarding.dismiss();
   if (mode === 'region') {
     const def = disasterPanel.selected;
     if (def?.id === 'asteroid' && def.scales.includes('region'))
