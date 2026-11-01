@@ -192,11 +192,13 @@ export class Particles {
 
   clear(): void {
     for (let i = 0; i < this.capacity; i++) this.life.setXYZW(i, -1e6, 1, 0, 0);
+    // Everything changed: drop any stale partial range so the whole buffer is re-uploaded.
+    this.life.clearUpdateRanges();
     this.life.needsUpdate = true;
     this.head = 0;
     this.emitted = 0;
-    this.dirtyLo = Infinity;
-    this.dirtyHi = -1;
+    this.dirtyStart = 0;
+    this.dirtyCount = 0;
   }
 
   dispose(): void {
@@ -204,25 +206,38 @@ export class Particles {
     for (const l of this.layers) l.mesh.material.dispose();
   }
 
-  private dirtyLo = Infinity;
-  private dirtyHi = -1;
+  /** Emits since the last flush are contiguous in the ring: [dirtyStart, dirtyStart + dirtyCount). */
+  private dirtyStart = 0;
+  private dirtyCount = 0;
 
   private markDirty(i: number): void {
-    if (i < this.dirtyLo) this.dirtyLo = i;
-    if (i > this.dirtyHi) this.dirtyHi = i;
-    // A wrap-around emit makes the range span the buffer; fall back to a full upload then.
+    if (this.dirtyCount === 0) this.dirtyStart = i;
+    if (this.dirtyCount < this.capacity) this.dirtyCount++;
+  }
+
+  /** Slot ranges to upload this frame: none, one, or two (when the ring wrapped). */
+  dirtyRanges(): Array<[start: number, count: number]> {
+    const n = this.dirtyCount;
+    if (n === 0) return [];
+    const s = this.dirtyStart;
+    if (s + n <= this.capacity) return [[s, n]];
+    return [
+      [s, this.capacity - s],
+      [0, s + n - this.capacity],
+    ];
   }
 
   private flush(): void {
-    if (this.dirtyHi < 0) return;
-    const lo = this.dirtyLo;
-    const n = this.dirtyHi - lo + 1;
+    const ranges = this.dirtyRanges();
+    if (ranges.length === 0) return;
     for (const a of [this.pos, this.vel, this.life, this.size, this.color, this.colorEnd]) {
       a.clearUpdateRanges();
-      a.addUpdateRange(lo * a.itemSize, n * a.itemSize);
+      for (const [start, count] of ranges) {
+        a.addUpdateRange(start * a.itemSize, count * a.itemSize);
+      }
       a.needsUpdate = true;
     }
-    this.dirtyLo = Infinity;
-    this.dirtyHi = -1;
+    this.dirtyStart = 0;
+    this.dirtyCount = 0;
   }
 }

@@ -34,4 +34,21 @@ describe('Particles', () => {
     p.clear();
     expect(p.liveCount).toBe(0);
   });
+
+  it('uploads only the emitted slots, split in two when the ring wraps', () => {
+    const p = new Particles(10);
+    expect(p.dirtyRanges()).toEqual([]);
+    for (let i = 0; i < 3; i++) p.emit(spec);
+    expect(p.dirtyRanges()).toEqual([[0, 3]]);
+    p.update(0.1);
+    expect(p.dirtyRanges()).toEqual([]);
+    for (let i = 0; i < 9; i++) p.emit(spec); // slots 3..9 then 0..1
+    expect(p.dirtyRanges()).toEqual([
+      [3, 7],
+      [0, 2],
+    ]);
+    for (let i = 0; i < 30; i++) p.emit(spec); // more than a full lap: whole buffer
+    const total = p.dirtyRanges().reduce((n, [, c]) => n + c, 0);
+    expect(total).toBe(10);
+  });
 });
