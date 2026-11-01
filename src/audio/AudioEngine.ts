@@ -11,6 +11,7 @@ export class AudioEngine {
   private noise: AudioBuffer | null = null;
   private windGain: GainNode | null = null;
   private fireGain: GainNode | null = null;
+  private rumbleGain: GainNode | null = null;
   muted = false;
 
   /** Call from a user-gesture handler. Safe to call repeatedly. */
@@ -25,6 +26,7 @@ export class AudioEngine {
       this.noise = this.makeNoise(this.ctx);
       this.windGain = this.startLoop(420, 0.9, 'lowpass');
       this.fireGain = this.startLoop(2600, 1.5, 'bandpass');
+      this.rumbleGain = this.startLoop(70, 0.7, 'lowpass');
     }
     void this.ctx.resume();
   }
@@ -80,11 +82,12 @@ export class AudioEngine {
   }
 
   /** Ambient loop levels, each 0..1. Call every frame or HUD tick. */
-  setAmbient(wind: number, fire: number): void {
+  setAmbient(wind: number, fire: number, rumble = 0): void {
     const { ctx } = this;
     if (!ctx) return;
     this.windGain?.gain.setTargetAtTime(wind * 0.5, ctx.currentTime, 0.3);
     this.fireGain?.gain.setTargetAtTime(fire * 0.35, ctx.currentTime, 0.3);
+    this.rumbleGain?.gain.setTargetAtTime(rumble * 0.7, ctx.currentTime, 0.4);
   }
 
   private makeNoise(ctx: AudioContext): AudioBuffer {

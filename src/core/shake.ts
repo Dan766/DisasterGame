@@ -14,6 +14,11 @@ export class CameraShake {
     this.trauma = Math.min(1, Math.max(this.trauma, a) + a * (1 - this.trauma) * 0.35);
   }
 
+  /** Raises trauma to at least `amount` without stacking, so a sustained source (quake) can call it every frame. */
+  hold(amount: number): void {
+    this.trauma = Math.max(this.trauma, Math.min(1, Math.max(0, amount)));
+  }
+
   /** Advances by sim seconds; trauma decays linearly. */
   update(dt: number): void {
     this.time += dt;

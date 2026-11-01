@@ -25,3 +25,14 @@ export function windRoarLevel(radiiCells: readonly number[]): number {
   for (const v of radiiCells) r = Math.max(r, v);
   return Math.min(1, r / 7);
 }
+
+/** Rumble loudness 0..1 from the number of active earthquakes (saturates at three). */
+export function quakeRumbleLevel(quakesActive: number): number {
+  if (quakesActive <= 0) return 0;
+  return Math.min(1, 0.45 + 0.275 * (quakesActive - 1));
+}
+
+/** Sustained camera trauma 0..1 while earthquakes shake; kept below an impact's peak. */
+export function quakeShakeTrauma(quakesActive: number): number {
+  return quakeRumbleLevel(quakesActive) * 0.5;
+}

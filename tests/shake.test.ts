@@ -49,4 +49,12 @@ describe('CameraShake', () => {
     expect(a.trauma).toBe(0);
     expect(mag(a.sample(v()))).toBe(0);
   });
+  it('hold raises trauma to a floor without stacking', () => {
+    const s = new CameraShake();
+    for (let i = 0; i < 10; i++) s.hold(0.3);
+    expect(s.trauma).toBeCloseTo(0.3, 5);
+    s.add(0.8);
+    s.hold(0.3);
+    expect(s.trauma).toBeGreaterThanOrEqual(0.8);
+  });
 });

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { boomDelaySeconds, boomGain, crackleLevel, windRoarLevel } from '../src/audio/mix';
+import {
+  boomDelaySeconds,
+  boomGain,
+  crackleLevel,
+  quakeRumbleLevel,
+  quakeShakeTrauma,
+  windRoarLevel,
+} from '../src/audio/mix';
 
 describe('audio mix', () => {
   it('delays boom by distance / speed of sound, capped', () => {
@@ -21,5 +28,12 @@ describe('audio mix', () => {
     expect(windRoarLevel([])).toBe(0);
     expect(windRoarLevel([1.5, 7])).toBe(1);
     expect(windRoarLevel([3.5])).toBeCloseTo(0.5, 5);
+  });
+  it('quake rumble and sustained shake scale with active quakes and saturate', () => {
+    expect(quakeRumbleLevel(0)).toBe(0);
+    expect(quakeRumbleLevel(2)).toBeGreaterThan(quakeRumbleLevel(1));
+    expect(quakeRumbleLevel(50)).toBe(1);
+    expect(quakeShakeTrauma(0)).toBe(0);
+    expect(quakeShakeTrauma(50)).toBeLessThanOrEqual(0.5);
   });
 });

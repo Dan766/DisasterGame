@@ -241,6 +241,11 @@ export class RegionFx {
     this.particles.update(dt);
   }
 
+  /** Keeps the camera shaking at least at `trauma` (0..1) while an earthquake is active. */
+  holdShake(trauma: number): void {
+    this.shake.hold(trauma);
+  }
+
   /** Camera shake offset for this frame in world units; `distance` is camera-to-target so the on-screen sway stays constant. */
   shakeOffset(out: Vector3, distance = 100): Vector3 {
     const o = this.shake.sample(out);

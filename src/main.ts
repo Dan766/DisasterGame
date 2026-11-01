@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
 import { AudioEngine } from './audio/AudioEngine';
-import { boomDelaySeconds, crackleLevel, windRoarLevel } from './audio/mix';
+import {
+  boomDelaySeconds,
+  crackleLevel,
+  quakeRumbleLevel,
+  quakeShakeTrauma,
+  windRoarLevel,
+} from './audio/mix';
 import { FixedStepClock } from './core/clock';
 import { GlobeControls } from './input/GlobeControls';
 import { GlobePicker, type GlobePick } from './input/Picking';
@@ -694,8 +700,10 @@ renderer.setAnimationLoop((now) => {
       audio.setAmbient(
         windRoarLevel(regionSim.tornados.map((t) => t.radiusCells)),
         crackleLevel(burning),
+        quakeRumbleLevel(regionSim.quakesActive),
       );
     }
+    if (regionSim.quakesActive > 0) regionFx.holdShake(quakeShakeTrauma(regionSim.quakesActive));
   } else audio.setAmbient(0, 0);
 
   hudTimer -= dt;
