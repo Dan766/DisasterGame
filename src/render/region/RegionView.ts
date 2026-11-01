@@ -36,6 +36,7 @@ import {
   type RegionWorld,
 } from '../../sim/region';
 import { Biome } from '../../sim/world';
+import { StructureLodSet } from './structureLod';
 import { RowSpans } from './rowSpans';
 
 /** World units per cell (100 m). Heights are meters / 100 × VERTICAL_EXAGGERATION. */
@@ -146,6 +147,9 @@ const SAND_COLOR = new Color(0xd8c690);
 const WET_SAND_COLOR = new Color(0xb2a67a);
 
 /** One generated region as a lit, flat-shaded low-poly diorama (own scene). */
+/** World-unit distance beyond which structures use their simple mesh. */
+const STRUCTURE_LOD_DIST = 90;
+
 export class RegionView {
   readonly scene = new Scene();
   private readonly group = new Group();
@@ -160,7 +164,7 @@ export class RegionView {
   private terrainMesh: Mesh | null = null;
   private waterMesh: Mesh | null = null;
   private fireMesh: Mesh | null = null;
-  private structureSets: { mesh: InstancedMesh; cells: number[] }[] = [];
+  private structureSets: StructureLodSet[] = [];
   private readonly charred = new Color(0x2a2220);
 
   constructor() {
@@ -483,7 +487,7 @@ export class RegionView {
     for (const set of this.structureSets) {
       for (let k = 0; k < set.cells.length; k++) {
         const cell = set.cells[k]!;
-        set.mesh.getMatrixAt(k, m);
+        set.getMatrix(k, m);
         m.decompose(pos, quat, scale);
         if (scale.x === 0) continue;
         if (region.structHP[cell]! <= 0 || region.structure[cell] === Structure.None) {
@@ -492,9 +496,9 @@ export class RegionView {
           pos.y = this.heightAt(pos.x, pos.z);
           m.compose(pos, quat, scale);
         }
-        set.mesh.setMatrixAt(k, m);
+        set.setMatrix(k, m);
       }
-      set.mesh.instanceMatrix.needsUpdate = true;
+      set.markDirty();
     }
     // Trees: cleared ground (fuel erased without burning) loses its trees.
     const trees = this.trees;
@@ -602,6 +606,11 @@ export class RegionView {
     return new Mesh(geometry, material);
   }
 
+  /** Switch structures between detailed and simple meshes for the given camera position. */
+  updateLod(cameraPos: Vector3): void {
+    for (const set of this.structureSets) set.updateLod(cameraPos.x, cameraPos.y, cameraPos.z);
+  }
+
   private buildStructures(region: RegionWorld): void {
     const houseGeo = this.track(
       mergeGeometries([
@@ -609,6 +618,8 @@ export class RegionView {
         new ConeGeometry(0.55, 0.38, 4).rotateY(Math.PI / 4).translate(0, 0.61, 0),
       ])!,
     );
+    // Far LOD: a single box (12 triangles vs 20) for distant houses.
+    const houseFarGeo = this.track(new BoxGeometry(0.62, 0.8, 0.62).translate(0, 0.4, 0));
     const towerGeo = this.track(new BoxGeometry(0.8, 4, 0.8).translate(0, 2, 0));
     const houses: number[] = [];
     const towers: number[] = [];
@@ -618,10 +629,16 @@ export class RegionView {
       else if (region.structure[i] === Structure.Tower) towers.push(i);
     }
     const rng = createRng(hashCombine(region.seed, 77));
-    const place = (cells: number[], geometry: BufferGeometry, palette: number[], tall: number) => {
+    const place = (
+      cells: number[],
+      geometry: BufferGeometry,
+      farGeometry: BufferGeometry,
+      palette: number[],
+      tall: number,
+    ) => {
       if (cells.length === 0) return;
       const material = this.track(new MeshLambertMaterial({ flatShading: true }));
-      const mesh = new InstancedMesh(geometry, material, cells.length);
+      const set = new StructureLodSet(cells, geometry, farGeometry, material, STRUCTURE_LOD_DIST);
       const m = new Matrix4();
       const q = new Quaternion();
       const color = new Color();
@@ -639,15 +656,21 @@ export class RegionView {
           q,
           new Vector3(1, tall * rng.float(0.85, 1.3), 1),
         );
-        mesh.setMatrixAt(k, m);
-        mesh.setColorAt(k, color.set(rng.pick(palette)));
+        set.setMatrix(k, m);
+        set.setColor(k, color.set(rng.pick(palette)));
       });
-      this.track({ dispose: () => mesh.dispose() });
-      this.group.add(mesh);
-      this.structureSets.push({ mesh, cells });
+      set.markDirty();
+      this.track({
+        dispose: () => {
+          set.near.dispose();
+          set.far.dispose();
+        },
+      });
+      this.group.add(set.near, set.far);
+      this.structureSets.push(set);
     };
-    place(houses, houseGeo, [0xe8dcc6, 0xd9a58a, 0xc7d2d8, 0xe6c88f, 0xb78b6e], 1);
-    place(towers, towerGeo, [0x9fb0bd, 0xb6bcc2, 0x8c9aa6], 1.6);
+    place(houses, houseGeo, houseFarGeo, [0xe8dcc6, 0xd9a58a, 0xc7d2d8, 0xe6c88f, 0xb78b6e], 1);
+    place(towers, towerGeo, towerGeo, [0x9fb0bd, 0xb6bcc2, 0x8c9aa6], 1.6);
   }
 
   private buildTrees(region: RegionWorld, palette: Palette): void {

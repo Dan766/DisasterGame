@@ -668,6 +668,7 @@ renderer.setAnimationLoop((now) => {
       new THREE.Vector3(),
       regionCamera.position.distanceTo(regionControls.orbit.target),
     );
+    regionView.updateLod(regionCamera.position);
     regionCamera.position.add(shakeOffset);
     postFx.render(regionView.scene, regionCamera);
     regionCamera.position.sub(shakeOffset);
